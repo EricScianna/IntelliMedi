@@ -1,0 +1,6 @@
+@IntelliMedi.API_HostAddress = http://localhost:5207
+
+GET {{IntelliMedi.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
