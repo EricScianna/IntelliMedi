@@ -49,11 +49,14 @@ namespace IntelliMedi.API.Controllers
             //combina la chiave con l'algoritmo di firma HmacSha256. Questo è l'algoritmo che genera la firma digitale del token
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            //informazioni sull'utente contenute nel token: ID e username. Il client li legge dal token senza fare un'altra richiesta al database
+            //informazioni sull'utente contenute nel token: ID, username, ruolo. Il client li legge dal token senza fare un'altra richiesta al database
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, utente.Id.ToString()),
-                new Claim(ClaimTypes.Name, utente.Username),
+                new Claim(ClaimTypes.Name, utente.Nome),
+                new Claim(ClaimTypes.Surname, utente.Cognome),
+                new Claim("username", utente.Username),
+                new Claim(ClaimTypes.Role, utente.GetType().Name)
             };
 
             // assembla il token con scadenza 8 ore e firma. Dopo 8 ore il token non sarà più valido e l'utente dovrà rifare il login.

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <title>Medisport | Home</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/area-personale.css">
+</head>
+
+<body class="d-flex flex-column min-vh-100">
+    <!-- Profile Header -->
+    <header>
+        <nav class="navbar navbar-expand-lg text-white" aria-label="Header">
+            <div class="container-fluid">
+                <button class="btn navbar-brand" id="mostraCards">
+                    <img src="img/logo2.png" alt="Bootstrap" width="50" height="44">
+                </button>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
+                    aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                    <div class="d-flex align-items-center gap-2 ms-5 fs-4">
+                        <span>Area riservata di</span>
+                        <span id="nomeAccount"></span>
+                    </div>
+                    <ul class="navbar-nav mb-2 mb-lg-0 ms-auto">
+                        <li class="nav-item ">
+                            <a class="nav-link fw-bold text-white" href="index.html" data-bs-toggle="modal"
+                                data-bs-target="#modalLogin" id="logoutButton">
+                                LOGOUT<i class="bi bi-door-open ms-2" style="font-size: 2rem; "></i></a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <div class="d-flex flex-grow-1">
+        <!-- Sidebar -->
+        <nav class="sidebar flex-shrink-0 p-3" aria-label="Sidebar">
+            <button class="toggle-btn btn" onclick="toggleSidebar()">
+                <i class="bi bi-chevron-double-left fs-4"></i>
+            </button>
+            <div class="nav flex-column mt-3" id="menuSidebar">
+            </div>
+        </nav>
+        <!-- Content Area -->
+        <div class="flex-grow-1 m-4" id="contentArea">
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+        crossorigin="anonymous"></script>
+    <script src="script/area-personale.js"></script>
+</body>
+
+</html>
