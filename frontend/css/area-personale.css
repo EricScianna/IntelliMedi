@@ -1,106 +1,105 @@
 body {
-    overflow-x: hidden;
+  overflow-x: hidden;
 }
 
 header {
-    position: static;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    border-radius: 0px 0px 10px 0px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    background: linear-gradient(135deg, #08808E 0%, #08808E 60%, #16181f 100%);
+  position: static;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  border-radius: 0px 0px 10px 0px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #08808e 0%, #08808e 60%, #16181f 150%);
 }
 
 .navbar-brand img {
-    height: 60px;
-    width: auto;
+  height: 60px;
+  width: auto;
 }
 
 #menuSidebar {
-    width: 100%;
+  width: 100%;
 }
 
 .sidebar {
-    position: relative;
-    width: 15%;
-    border-radius: 0px 10px 10px 0px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    background: linear-gradient(160deg, #08808E 0%, #08808E 40%, #16181f 100%);
-    transition: all 0.3s ease;
+  position: relative;
+  width: 15%;
+  border-radius: 0px 10px 10px 0px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(160deg, #08808e 0%, #08808e 40%, #16181f 120%);
+  transition: all 0.3s ease;
 }
 
 .sidebar.collapsed {
-    width: 7%;
+  width: 7%;
 }
 
 .sidebar-link {
-    margin: 4px 16px;
-    white-space: nowrap;
-    overflow: hidden;
-    border-radius: 8px;
-    color: #ffffffd7;
-    transition: all 0.2s ease;
+  margin: 4px 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  border-radius: 8px;
+  color: #ffffffd7;
+  transition: all 0.2s ease;
 }
 
 .collapsed .sidebar-link {
-    margin: 4px 32px;
-    width: 50%;
+  margin: 4px 32px;
+  width: 50%;
 }
 
 .sidebar-link:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.1);
-    transform: translateX(5px);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateX(5px);
 }
 
 .sidebar-link.active {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .collapsed .hide-on-collapse {
-    width: 0;
-    overflow: hidden;
-    opacity: 0;
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
 }
 
 #contentArea {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-    border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  border-radius: 10px;
 }
 
 .card-border {
-    background-color: #CCDFCD;
-    border-radius: 10px;
+  background-color: #ccdfcd;
+  border-radius: 10px;
 }
 
 .titleMedisport {
-    background-color: #08808E;
+  background-color: #08808e;
 }
 
 .cardContent:hover {
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    transition: all 0.3s ease;
-    transform: translate(3px, 3px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  transform: translate(3px, 3px);
 }
 
 .toggle-btn {
-    position: absolute;
-    right: -20px;
-    top: 10px;
-    border: none;
-    cursor: pointer;
-    background: white;
-    border-radius: 50%;
+  position: absolute;
+  right: -20px;
+  top: 10px;
+  border: none;
+  cursor: pointer;
+  background: white;
+  border-radius: 50%;
 }
 
 .toggle-btn:hover {
-    background: rgba(255, 255, 255, 0.841);
-    transform: translateX(1px);
+  background: rgba(255, 255, 255, 0.841);
+  transform: translateX(1px);
 }
 
 .collapsed .toggle-btn {
-    transform: rotate(180deg);
+  transform: rotate(180deg);
 }
-

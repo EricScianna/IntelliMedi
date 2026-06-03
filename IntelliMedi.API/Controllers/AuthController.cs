@@ -29,7 +29,8 @@ namespace IntelliMedi.API.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Login(LoginRequest loginRequest)
         {
-            Utente? utente = await _context.Pazienti.FirstOrDefaultAsync(u => u.Username == loginRequest.Username);
+            Utente? utente = await _context.Amministratori.FirstOrDefaultAsync(u => u.Username == loginRequest.Username);
+            utente ??= await _context.Pazienti.FirstOrDefaultAsync(u => u.Username == loginRequest.Username);
             utente ??= await _context.Medici.FirstOrDefaultAsync(u => u.Username == loginRequest.Username);
             if (utente == null)
             {
@@ -40,7 +41,17 @@ namespace IntelliMedi.API.Controllers
                 return Unauthorized();
 
             var token = GeneraToken(utente);
-            return Ok(new { token });
+            return Ok(new
+            {
+                token,
+                utente = new
+                {
+                    id = utente.Id,
+                    ruolo = utente.GetType().Name,
+                    nome = utente.Nome,
+                    cognome = utente.Cognome
+                }
+            });
         }
         private string GeneraToken(Utente utente)
         {

@@ -33,6 +33,7 @@ namespace IntelliMedi.API.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Amministratore")]
         public async Task<ActionResult<Medico>> Create(Medico medico)
         {
             medico.PasswordHash = BCrypt.Net.BCrypt.HashPassword(medico.PasswordHash);
@@ -42,6 +43,7 @@ namespace IntelliMedi.API.Controllers
         }
 
         [HttpPut("{Id}")]
+        [Authorize(Roles = "Amministratore")]
         public async Task<IActionResult> Update(int id, Medico medico)
         {
             if (id != medico.Id)
@@ -67,6 +69,7 @@ namespace IntelliMedi.API.Controllers
         }
 
         [HttpDelete("{Id}")]
+        [Authorize(Roles = "Amministratore")]
         public async Task<IActionResult> Delete(int id)
         {
 

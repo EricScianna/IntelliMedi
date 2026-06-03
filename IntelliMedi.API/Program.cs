@@ -1,4 +1,5 @@
 using IntelliMedi.API.Data;
+using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -45,6 +46,22 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+using var scope = app.Services.CreateScope();
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    if (!db.Amministratori.Any())
+    {
+        db.Amministratori.Add(new Amministratore
+        {
+            Nome = "Admin",
+            Cognome = "Admin",
+            Username = "admin",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password")
+        });
+        db.SaveChanges();
+    }
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

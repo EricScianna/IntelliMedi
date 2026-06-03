@@ -1,6 +1,6 @@
 ﻿namespace IntelliMedi.API.Models
 {
-    public class Medico : Utente
+    public class Medico : Persona
     {
         public ICollection<TipologiaVisita> TipologiaVisite { get; set; } = new List<TipologiaVisita>();
         public ICollection<Appuntamento> Appuntamenti { get; set; } = new List<Appuntamento>();

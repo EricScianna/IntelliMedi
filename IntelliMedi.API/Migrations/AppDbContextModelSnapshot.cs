@@ -17,6 +17,33 @@ namespace IntelliMedi.API.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.7");
 
+            modelBuilder.Entity("IntelliMedi.API.Models.Amministratore", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Cognome")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Amministratori");
+                });
+
             modelBuilder.Entity("IntelliMedi.API.Models.Appuntamento", b =>
                 {
                     b.Property<int>("Id")

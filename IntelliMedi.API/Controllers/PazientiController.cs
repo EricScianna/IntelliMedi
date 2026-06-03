@@ -5,6 +5,7 @@ using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -19,6 +20,7 @@ public class PazientiController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Amministratore")]
     public async Task<ActionResult<IEnumerable<Paziente>>> GetAll()
     {
         return await _context.Pazienti.ToListAsync();
@@ -34,33 +36,47 @@ public class PazientiController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<Paziente>> Create(Paziente paziente)
+    [AllowAnonymous]
+    public async Task<ActionResult<Paziente>> Create(RegistrazioneRequest registrazione)
     {
-        paziente.PasswordHash = BCrypt.Net.BCrypt.HashPassword(paziente.PasswordHash);
+        if (_context.Pazienti.Any(p => p.Username == registrazione.Username))
+            return BadRequest();
+
+        Paziente paziente = new Paziente
+        {
+            Nome = registrazione.Nome,
+            Cognome = registrazione.Cognome,
+            Sesso = registrazione.Sesso,
+            DataNascita = registrazione.DataNascita,
+            CodiceFiscale = registrazione.CodiceFiscale,
+            Username = registrazione.Username,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(registrazione.Password)
+        };
+
         _context.Pazienti.Add(paziente);
         await _context.SaveChangesAsync();
         return CreatedAtAction(nameof(GetById), new { id = paziente.Id }, paziente);
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, Paziente paziente)
+    public async Task<IActionResult> Update(int id, ModificaAnagraficaRequest modifica)
     {
-        if (id != paziente.Id)
-            return BadRequest();
-
+        var idUtenteLoggato = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (idUtenteLoggato != id.ToString())
+        {
+            return Forbid();
+        }
         var existingPaziente = await _context.Pazienti.FindAsync(id);
         if (existingPaziente == null)
         {
             return NotFound();
         }
 
-        existingPaziente.Nome = paziente.Nome;
-        existingPaziente.Cognome = paziente.Cognome;
-        existingPaziente.CodiceFiscale = paziente.CodiceFiscale;
-        existingPaziente.DataNascita = paziente.DataNascita;
-        existingPaziente.Sesso = paziente.Sesso;
-        existingPaziente.Username = paziente.Username;
-        existingPaziente.PasswordHash = paziente.PasswordHash;
+        existingPaziente.Nome = modifica.Nome;
+        existingPaziente.Cognome = modifica.Cognome;
+        existingPaziente.CodiceFiscale = modifica.CodiceFiscale;
+        existingPaziente.DataNascita = modifica.DataNascita;
+        existingPaziente.Sesso = modifica.Sesso;
 
         await _context.SaveChangesAsync();
         return NoContent();

@@ -18,9 +18,9 @@ async function mostraCards() {
     const contentArea = document.getElementById('contentArea');
     contentArea.innerHTML = `
         <div class="m-4">
-            <div class="row g-0">
+            <div class="row justify-content-evenly">
                 <!-- Card anagrafica -->
-                <div class="col-3 p-3 me-4 card-border">
+                <div class="col-3 p-3 card-border">
                     <button class="btn p-0 w-100 border-0" id="mostraAnagraficaCards">
                         <div class="card p-0 cardContent">
                             <div class="card-header text-white titleMedisport">
@@ -38,7 +38,7 @@ async function mostraCards() {
                     </button>
                 </div>
                 <!-- Card prenotazioni -->
-                <div class="col-3 p-3 me-4 card-border">
+                <div class="col-3 p-3 card-border">
                     <button class="btn p-0 w-100 border-0" id="mostraPrenotazioniCards">
                         <div class="card p-0 cardContent">
                             <div class="card-header text-white titleMedisport">
