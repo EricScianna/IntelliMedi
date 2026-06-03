@@ -1,0 +1,84 @@
+.homePage .header {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  transition: padding 0.3s ease;
+}
+
+.homePage .sticky {
+  position: fixed;
+  top: 0;
+  background-color: #ffffff;
+}
+
+.homePage .sticky :global(nav.navbar) {
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.homePage .sticky :global(.navbar-brand) img {
+  height: 51px;
+  width: auto;
+}
+
+.homePage :global(nav.navbar) {
+  background-color: #ffffff;
+  border-radius: 10px;
+  max-width: 1500px;
+  margin: 0 auto;
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.15);
+}
+
+.navLink {
+  position: relative;
+}
+
+.navLink::before {
+  content: "";
+  display: block;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 5px;
+  background-color: #08808e;
+  transition: width 0.5s ease;
+}
+
+.navLink:hover::before,
+.navLink:global(.active)::before {
+  width: 100%;
+}
+
+.homePage :global(.navbar-brand) img {
+  height: 60px;
+  width: auto;
+}
+
+.homePage .prenotaBar {
+  background-color: #08808e;
+}
+
+.homePage :global(.carousel-indicators) button {
+  width: 15px;
+  height: 15px;
+  border-radius: 100%;
+}
+
+.homePage :global(.carousel-item) img {
+  max-height: 800px;
+  object-fit: cover;
+}
+
+@media (min-width: 768px) {
+  .homePage :global(.container-fluid) {
+    align-items: stretch;
+  }
+  .homePage :global(.navbar-nav),
+  .homePage :global(.nav-item),
+  .homePage :global(.nav-link) {
+    height: 100%;
+  }
+}

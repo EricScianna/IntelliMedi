@@ -1,0 +1,19 @@
+.cascadingRight {
+  margin-right: -50px;
+}
+
+.background {
+  background: linear-gradient(150deg, #08808e 20%, #08808e 40%, #000000 120%);
+}
+
+.imageBackground {
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+
+}
+
+@media (max-width: 991.98px) {
+  .cascadingRight {
+    margin-right: 0;
+  }
+}

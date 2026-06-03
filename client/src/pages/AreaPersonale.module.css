@@ -1,0 +1,105 @@
+.areaPersonale :global(.header) {
+  position: static;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  border-radius: 0px 0px 10px 0px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #08808e 0%, #08808e 60%, #16181f 150%);
+}
+
+.areaPersonale :global(.navbar-brand) img {
+  height: 60px;
+  width: auto;
+}
+
+.menuSidebar {
+  width: 90%;
+}
+
+.sidebar {
+  position: relative;
+  width: 15%;
+  border-radius: 0px 10px 10px 0px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(160deg, #08808e 0%, #08808e 40%, #16181f 120%);
+  transition: all 0.3s ease;
+}
+
+:global(.collapsed).sidebar {
+  width: 7%;
+}
+
+.sidebarLink {
+  margin: 4px 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  border-radius: 8px;
+  color: #ffffffd7;
+  transition: all 0.2s ease;
+}
+
+:global(.collapsed) .sidebarLink {
+  margin: 4px 32px;
+  width: 50%;
+}
+
+.sidebarLink:hover {
+  color: #ffffff;
+  background: rgb(0, 0, 0, 0.07);
+  transform: translateX(5px);
+}
+
+:global(.collapsed) .hideOnCollapse {
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.contentArea {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  border-radius: 10px;
+}
+
+.cardBorder {
+  background-color: #ccdfcd;
+  border-radius: 10px;
+}
+
+.titleMedisport {
+  background-color: #08808e;
+}
+
+.cardContent:hover {
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  transform: translate(3px, 3px);
+}
+
+.toggleBtn {
+  position: absolute;
+  right: -20px;
+  top: 10px;
+  border: none;
+  cursor: pointer;
+  background: white;
+  border-radius: 50%;
+}
+
+.toggleBtn:hover {
+  background: rgba(255, 255, 255, 0.841);
+  transform: translateX(1px);
+}
+
+:global(.collapsed) .toggleBtn {
+  transform: rotate(180deg);
+}
+
+.projectListTable {
+  border-collapse: separate;
+  border-spacing: 0 12px;
+}
+
+.projectListTableColor {
+  background-color: #eee;
+}
