@@ -139,7 +139,7 @@ function AreaPersonale() {
   }
 
   async function getAllGenerico(sceltaModel: string) {
-    const risposta = await fetch(`${API_URL}/api/${tipoLista}`, {
+    const risposta = await fetch(`${API_URL}/api/${sceltaModel}`, {
       method: "GET",
       headers: { Authorization: "Bearer " + localStorage.getItem("token") },
     });
