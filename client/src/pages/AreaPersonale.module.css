@@ -103,3 +103,15 @@
 .projectListTableColor {
   background-color: #eee;
 }
+
+.w10 {
+  width: 10% !important;
+}
+
+.w15 {
+  width: 15% !important;
+}
+
+.w20 {
+  width: 20% !important;
+}

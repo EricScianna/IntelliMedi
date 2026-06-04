@@ -90,7 +90,7 @@ function Login() {
                       <input type="password" className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} id="Password" />
                       <label htmlFor="Password">Password</label>
                     </div>
-                    <button type="submit" data-mdb-button-init data-mdb-ripple-init className="btn btn-primary btn-block mb-4">
+                    <button type="submit" className="btn btn-primary btn-block mb-4">
                       Accedi
                     </button>
                     <div className="text-center">
@@ -155,7 +155,7 @@ function Login() {
                       <input type="password" className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} id="Password" />
                       <label htmlFor="Password">Password</label>
                     </div>
-                    <button type="submit" data-mdb-button-init data-mdb-ripple-init className="btn btn-primary btn-block mb-4">
+                    <button type="submit" className="btn btn-primary btn-block mb-4">
                       Registrati
                     </button>
                     <div className="text-center">

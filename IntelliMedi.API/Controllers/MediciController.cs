@@ -1,4 +1,5 @@
 ﻿using IntelliMedi.API.Data;
+using IntelliMedi.API.Migrations;
 using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,9 +19,18 @@ namespace IntelliMedi.API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Medico>>> GetAll()
+        public async Task<ActionResult<IEnumerable<MedicoResponse>>> GetAll()
         {
-            return await _context.Medici.ToListAsync();
+            return _context.Medici.Include(m => m.TipologiaVisite).ToList().Select(m => new MedicoResponse()
+            {
+                Id = m.Id,
+                Nome = m.Nome,
+                Cognome = m.Cognome,
+                TipologiaVisite = (m.TipologiaVisite?.ToList() ?? new List<TipologiaVisita>()).Select(t => t.Descrizione).ToList(),
+                Sesso = m.Sesso,
+                DataNascita = m.DataNascita,
+                CodiceFiscale = m.CodiceFiscale
+            }).ToList();
         }
 
         [HttpGet("{id}")]
@@ -34,12 +44,36 @@ namespace IntelliMedi.API.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Amministratore")]
-        public async Task<ActionResult<Medico>> Create(Medico medico)
+        public async Task<ActionResult<Medico>> Create(RegistrazioneRequest registrazione)
         {
-            medico.PasswordHash = BCrypt.Net.BCrypt.HashPassword(medico.PasswordHash);
+            if (_context.Medici.Any(p => p.Username == registrazione.Username))
+                return BadRequest();
+
+            List<TipologiaVisita> listaTipologieVisite = new List<TipologiaVisita>();
+
+            if (registrazione.TipologiaVisite != null)
+            {
+                foreach (TipologiaVisita tipologia in registrazione.TipologiaVisite)
+                {
+                    var trovata = await _context.TipologieVisita.FindAsync(tipologia.Id);
+                    if (trovata != null) listaTipologieVisite.Add(trovata);
+                }
+            }
+            Medico medico = new Medico
+            {
+                Nome = registrazione.Nome,
+                Cognome = registrazione.Cognome,
+                Sesso = registrazione.Sesso,
+                DataNascita = registrazione.DataNascita,
+                CodiceFiscale = registrazione.CodiceFiscale,
+                Username = registrazione.Username,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(registrazione.Password),
+                TipologiaVisite = listaTipologieVisite
+            };
+
             _context.Medici.Add(medico);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetById), new { id = medico.Id }, medico);
+            return Created();
         }
 
         [HttpPut("{Id}")]

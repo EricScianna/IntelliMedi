@@ -6,14 +6,23 @@ import logo from "../assets/logo2.png";
 const API_URL = "https://localhost:7223";
 
 interface User {
+  id: number;
   nome: string;
   cognome: string;
-  codiceFiscale: string;
+  tipologiaVisite?: string[];
   dataNascita: string;
   sesso: number;
+  codiceFiscale?: string;
+  username?: string;
+  password?: string;
 }
 
-interface Voce {
+interface TipologiaVisita {
+  id: number;
+  descrizione: string;
+}
+
+interface VoceMenu {
   etichetta: string;
   descrizione: string;
   immagine: string;
@@ -21,18 +30,34 @@ interface Voce {
 }
 
 function AreaPersonale() {
+  // Stati per la gestione dei dati users
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
-  const [sesso, setSesso] = useState(0);
+  const [servizi, setServizi] = useState<TipologiaVisita[]>([]);
   const [dataNascita, setDataNascita] = useState("");
+  const [sesso, setSesso] = useState(0);
   const [codiceFiscale, setCodiceFiscale] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [user, setUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[] | null>(null);
+  const [tipologiaVisite, setTipologiaVisite] = useState<TipologiaVisita[] | null>(null);
+  // Stati per la gestione degli errori e successi
   const [errore, setErrore] = useState("");
   const [successo, setSuccesso] = useState("");
+  // Stati per la gestione della visualizzazione sezioni
   const navigate = useNavigate();
-  const [sezione, setSezione] = useState<"cards" | "anagrafica" | "prenotazioni" | "recensioni" | "listaUtenti">("cards");
+  const [sezioneContent, setsezioneContent] = useState<"cards" | "anagrafica" | "prenotazioni" | "recensioni" | "listaUtenti" | "creaMedico">("cards");
   const [sezioneAnagrafica, setSezioneAnagrafica] = useState<"visualizza" | "modifica">("visualizza");
-  const [user, setUser] = useState<User | null>(null);
+  const [tipoLista, setTipoLista] = useState("");
   const [sidebarChiusa, setSidebarChiusa] = useState(false);
+  // Stati per la gestione della lista users
+  const PER_PAGINA = 10;
+  const [pagina, setPagina] = useState(1);
+  const totaleUsers = users?.length ?? 0;
+  const totalePagine = Math.ceil(totaleUsers / PER_PAGINA);
+  const inizio = (pagina - 1) * PER_PAGINA;
+  const usersPagina = users?.slice(inizio, inizio + PER_PAGINA);
 
   useEffect(() => {
     if (!localStorage.getItem("token")) {
@@ -40,14 +65,32 @@ function AreaPersonale() {
     }
   }, [navigate]);
 
-  const vociPerRuolo: Record<string, Voce[]> = {
+  interface Colonna {
+    etichetta: string;
+    buttonNew?: boolean;
+    tipologiaServizio?: boolean;
+    tastoModifica?: boolean;
+  }
+
+  const colonnePerTipo: Record<string, Colonna[]> = {
+    Medici: [{ etichetta: "Medici", buttonNew: true, tipologiaServizio: true, tastoModifica: true }],
+    Pazienti: [{ etichetta: "Pazienti" }],
+  };
+  const visualizzazioneTabella = colonnePerTipo[tipoLista] ?? [];
+
+  const vociPerRuolo: Record<string, VoceMenu[]> = {
     Amministratore: [
-      { etichetta: "Pazienti", descrizione: "Visualizza e gestisci i pazienti del sistema", immagine: "bi-people", link: mostraListaUtenti },
-      { etichetta: "Medici", descrizione: "Visualizza e gestisci i medici del sistema", immagine: "bi-heart-pulse", link: mostraAnagrafica },
+      { etichetta: "Pazienti", descrizione: "Visualizza e gestisci i pazienti del sistema", immagine: "bi-people", link: () => getAllGenerico("Pazienti") },
+      { etichetta: "Medici", descrizione: "Visualizza e gestisci i medici del sistema", immagine: "bi-heart-pulse", link: () => getAllGenerico("Medici") },
       { etichetta: "Prenotazioni", descrizione: "Visualizza e gestisci le prenotazioni", immagine: "bi-calendar-check", link: mostraPrenotazioni },
       { etichetta: "Recensioni", descrizione: "Modera le recensioni", immagine: "bi-star-fill", link: mostraRecensioni },
     ],
     Paziente: [
+      { etichetta: "Anagrafica", descrizione: "Visualizza e modifica i tuoi dati personali", immagine: "bi-person", link: mostraAnagrafica },
+      { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: mostraPrenotazioni },
+      { etichetta: "Recensisci", descrizione: "Recensisci i servizi ricevuti", immagine: "bi-star-fill", link: mostraRecensioni },
+    ],
+    Medico: [
       { etichetta: "Anagrafica", descrizione: "Visualizza e modifica i tuoi dati personali", immagine: "bi-person", link: mostraAnagrafica },
       { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: mostraPrenotazioni },
       { etichetta: "Recensisci", descrizione: "Recensisci i servizi ricevuti", immagine: "bi-star-fill", link: mostraRecensioni },
@@ -63,15 +106,73 @@ function AreaPersonale() {
     localStorage.setItem("cognome", "");
   }
 
-  async function mostraListaUtenti() {
-    const risposta = await fetch(`${API_URL}/api/Pazienti`, {
+  function cambiaModalita(sezione: "listaUtenti" | "creaMedico") {
+    setsezioneContent(sezione);
+    setUsername("");
+    setPassword("");
+    setNome("");
+    setCognome("");
+    setSesso(0);
+    setDataNascita("");
+    setCodiceFiscale("");
+    setErrore("");
+  }
+
+  async function creaMedico(e: React.SubmitEvent) {
+    e.preventDefault();
+    setErrore("");
+
+    const risposta = await fetch(`${API_URL}/api/Medici`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+      body: JSON.stringify({ nome, cognome, tipologiaVisite: servizi, sesso, dataNascita, codiceFiscale, username, password }),
+    });
+
+    if (risposta.ok) {
+      getAllGenerico("Medici");
+    } else {
+      setErrore("Utente già esistente o dati non validi");
+    }
+  }
+
+  async function getAllGenerico(sceltaModel: string) {
+    const risposta = await fetch(`${API_URL}/api/${tipoLista}`, {
       method: "GET",
       headers: { Authorization: "Bearer " + localStorage.getItem("token") },
     });
 
-    const listaUtentiRisposta = await risposta.json();
-    console.log(listaUtentiRisposta);
-    setSezione("listaUtenti");
+    const listaModelsRisposta = await risposta.json();
+    if (risposta.ok) {
+      if (sceltaModel === "Pazienti" || sceltaModel === "Medici") {
+        setUsers(listaModelsRisposta);
+        setsezioneContent("listaUtenti");
+      }
+      if (sceltaModel === "TipologiaVisita") {
+        setTipologiaVisite(listaModelsRisposta);
+      }
+      setTipoLista(sceltaModel);
+      setErrore("");
+    } else {
+      setErrore("Dati non validi");
+    }
+  }
+
+  async function cancellaUser(id: string) {
+    const risposta = await fetch(`${API_URL}/api/${tipoLista}/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + localStorage.getItem("token") },
+    });
+
+    if (!risposta.ok) {
+      setErrore("Errore nella cancellazione");
+      setSuccesso("");
+      return;
+    }
+    setErrore("");
+    getAllGenerico(tipoLista);
   }
 
   async function mostraPrenotazioni() {}
@@ -94,7 +195,7 @@ function AreaPersonale() {
     else dati.sesso = "Femmina";
 
     setUser(dati);
-    setSezione("anagrafica");
+    setsezioneContent("anagrafica");
   }
 
   async function modificaAnagrafica(e: React.SubmitEvent) {
@@ -142,7 +243,7 @@ function AreaPersonale() {
             <button
               className="btn navbar-brand"
               onClick={() => {
-                setSezione("cards");
+                setsezioneContent("cards");
                 setErrore("");
                 setSuccesso("");
               }}
@@ -187,7 +288,13 @@ function AreaPersonale() {
           </button>
           <div className={`nav flex-column mt-3 ${styles.menuSidebar}`}>
             {vociSidebar.map((voce) => (
-              <button className={`d-flex align-items-center btn ${styles.sidebarLink} text-decoration-none p-3 fs-5`} onClick={mostraAnagrafica} key={voce.etichetta}>
+              <button
+                key={voce.etichetta}
+                className={`d-flex align-items-center btn ${styles.sidebarLink} text-decoration-none p-3 fs-5`}
+                onClick={() => {
+                  voce.link();
+                }}
+              >
                 <i className={`bi ${voce.immagine} me-3`}></i>
                 <span className={`${styles.hideOnCollapse}`}>{voce.etichetta}</span>
               </button>
@@ -197,7 +304,7 @@ function AreaPersonale() {
         {/* Content Area */}
         <div className={`flex-grow-1 m-4 ${styles.contentArea}`}>
           <div className="m-4">
-            {sezione === "cards" && (
+            {sezioneContent === "cards" && (
               /* Cards */
               <div className="row justify-content-evenly">
                 {vociSidebar.map((voce) => (
@@ -219,134 +326,244 @@ function AreaPersonale() {
                 ))}
               </div>
             )}
-            {sezione === "listaUtenti" && (
+            {sezioneContent === "listaUtenti" && (
               <div className="row g-0">
                 <div className={`p-3  ${styles.cardBorder}`}>
-                  <div className={`card ${styles.projectListTableColor}`}>
-                    <div className={`card-header text-white ${styles.titleMedisport}`}>
-                      <h5 className="m-2">
-                        Lista pazienti <span className="text-muted fw-normal ms-2">(834)</span>
-                      </h5>
-                    </div>
-                    <div className="row">
-                      <div className="col-lg-12">
-                        <div className="">
-                          <div className="table-responsive">
-                            <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0`}>
-                              <thead>
-                                <tr>
-                                  <th scope="col" className="ps-4">
-                                    <div className="form-check font-size-16">
-                                      <input type="checkbox" className="form-check-input" id="contacusercheck" />
-                                    </div>
-                                  </th>
-                                  <th scope="col">Nome</th>
-                                  <th scope="col">Cognome</th>
-                                  <th scope="col">Età</th>
-                                  <th scope="col">Sesso</th>
-                                  <th scope="col">Codice Fiscale</th>
-                                  <th scope="col">Gestione</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr>
-                                  <th scope="row" className="ps-4">
-                                    <div className="form-check font-size-16">
-                                      <input type="checkbox" className="form-check-input" id="contacusercheck1" />
-                                      <label className="form-check-label" htmlFor="contacusercheck1"></label>
-                                    </div>
-                                  </th>
-                                  <td>Simon Ryles</td>
-                                  <td>
-                                    <span className="badge badge-soft-success mb-0">Full Stack Developer</span>
-                                  </td>
-                                  <td>SimonRyles@minible.com</td>
-                                  <td>125</td>
-                                  <td>125</td>
-                                  <td>
-                                    <ul className="list-inline mb-0">
-                                      <li className="list-inline-item">
-                                        <a href="javascript:void(0);" data-bs-toggle="tooltip" data-bs-placement="top" title="Edit" className="px-2 text-primary">
-                                          <i className="bi bi-pencil font-size-18"></i>
-                                        </a>
-                                      </li>
-                                      <li className="list-inline-item">
-                                        <a href="javascript:void(0);" data-bs-toggle="tooltip" data-bs-placement="top" title="Delete" className="px-2 text-danger">
-                                          <i className="bi bi-trash font-size-18"></i>
-                                        </a>
-                                      </li>
-                                      <li className="list-inline-item dropdown">
-                                        <a className="text-muted dropdown-toggle font-size-18 px-2" href="#" role="button" data-bs-toggle="dropdown" aria-haspopup="true">
-                                          <i className="bi bi-three-dots-vertical"></i>
-                                        </a>
-                                        <div className="dropdown-menu dropdown-menu-end">
-                                          <a className="dropdown-item" href="#">
-                                            Visualizza prenotazioni
-                                          </a>
-                                        </div>
-                                      </li>
-                                    </ul>
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
+                  {visualizzazioneTabella.map((colonna) => (
+                    <div className={`card ${styles.projectListTableColor}`} key={colonna.etichetta}>
+                      <div className={`card-header text-white ${styles.titleMedisport}`}>
+                        <div className="row">
+                          <div className="col-6">
+                            <h5 className="m-2">
+                              Lista {colonna.etichetta} ({totaleUsers})
+                            </h5>
+                          </div>
+                          <div className="col-6 d-flex justify-content-end">
+                            {colonna.buttonNew && (
+                              <button
+                                className="btn btn-success"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalNew"
+                                onClick={() => {
+                                  getAllGenerico("TipologiaVisita");
+                                  cambiaModalita("creaMedico");
+                                  console.log(users);
+                                }}
+                              >
+                                <i className="bi-plus-lg"></i> Nuovo
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="row">
+                        <div className="col-lg-12">
+                          <div className="">
+                            <div className="table-responsive">
+                              <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
+                                <thead>
+                                  <tr>
+                                    <th scope="col" className={`${styles.w15} ps-4`}>
+                                      Nome
+                                    </th>
+                                    <th className={`${styles.w15}`} scope="col">
+                                      Cognome
+                                    </th>
+                                    {colonna.tipologiaServizio && (
+                                      <th className={`${styles.w15}`} scope="col">
+                                        Servizi
+                                      </th>
+                                    )}
+                                    <th className={`${styles.w15}`} scope="col">
+                                      Data di Nascita
+                                    </th>
+                                    <th className={`${styles.w15}`} scope="col">
+                                      Sesso
+                                    </th>
+                                    <th className={`${styles.w15}`} scope="col">
+                                      Codice Fiscale
+                                    </th>
+                                    <th className={`${styles.w10}`} scope="col">
+                                      Gestione
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {usersPagina?.map((user) => (
+                                    <tr key={user.id}>
+                                      <td className="ps-4">{user.nome}</td>
+                                      <td>{user.cognome}</td>
+                                      {colonna.tipologiaServizio && <td>{user.tipologiaVisite ? user.tipologiaVisite.join(", ") : "N/A"}</td>}
+                                      <td>
+                                        {new Date(user.dataNascita).toLocaleDateString("it-IT", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          year: "numeric",
+                                        })}
+                                      </td>
+                                      <td>{user.sesso === 0 ? "Maschio" : "Femmina"}</td>
+                                      <td>{user.codiceFiscale ? user.codiceFiscale : "N/A"}</td>
+                                      <td>
+                                        <ul className="list-inline m-0 colonnaGestione">
+                                          {colonna.tastoModifica && (
+                                            <li className="list-inline-item">
+                                              <button className="btn px-2 text-primary" title="Modifica">
+                                                <i className="bi bi-pencil font-size-18"></i>
+                                              </button>
+                                            </li>
+                                          )}
+                                          <li className="list-inline-item">
+                                            <button className="btn px-2 text-success" title="Prenotazioni attive">
+                                              <i className="bi-calendar-check"></i>
+                                            </button>
+                                          </li>
+                                          <li className="list-inline-item position-relative">
+                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => cancellaUser(user.id.toString())}>
+                                              <i className="bi bi-trash font-size-18"></i>
+                                            </button>
+                                          </li>
+                                        </ul>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                        {errore && <div className="invalid-tooltip">{errore}</div>}
+                      </div>
+                      <div className="p-3 row g-0 align-items-center pb-4">
+                        <div className="col-sm-6">
+                          <div>
+                            <p className="mb-sm-0">
+                              Mostrando {totaleUsers === 0 ? 0 : inizio + 1} a {Math.min(inizio + PER_PAGINA, totaleUsers)} di {totaleUsers} totali
+                            </p>
+                          </div>
+                        </div>
+                        <div className="col-sm-6 me-0">
+                          <div className="float-sm-end">
+                            <ul className="pagination mb-sm-0">
+                              <li className={`page-item ${pagina <= 1 ? "disabled" : ""}`}>
+                                <button className="btn page-link" onClick={() => setPagina(pagina - 1)} disabled={pagina <= 1}>
+                                  <i className="bi bi-chevron-left"></i>
+                                </button>
+                              </li>
+                              <li className="page-item">
+                                <div className="btn-toolbar" role="toolbar">
+                                  <div className="btn-group">
+                                    {Array.from({ length: totalePagine }, (_, indice) => (
+                                      <button key={indice} className={`btn btn-primary ${pagina === indice + 1 ? "active" : ""}`} onClick={() => setPagina(indice + 1)}>
+                                        {indice + 1}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </li>
+                              <li className={`page-item ${pagina >= totalePagine ? "disabled" : ""}`}>
+                                <button className="btn page-link" onClick={() => setPagina(pagina + 1)} disabled={pagina >= totalePagine}>
+                                  <i className="bi bi-chevron-right"></i>
+                                </button>
+                              </li>
+                            </ul>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="p-3 row g-0 align-items-center pb-4">
-                      <div className="col-sm-6">
-                        <div>
-                          <p className="mb-sm-0">Mostrando 1 to 10 of 57 entries</p>
+                  ))}
+                </div>
+              </div>
+            )}
+            {sezioneContent === "creaMedico" && (
+              <div className={` col-lg-6 mb-5 mb-lg-0 p-3 ${styles.cardBorder}`}>
+                <div className=" card bg-body-tertiary">
+                  <div className="card-body p-5 shadow-5 text-center">
+                    <h2 className="fw-bold mb-5">Registra nuovo medico</h2>
+                    <form onSubmit={creaMedico}>
+                      <div className="row">
+                        <div className="col-md-5 mb-4">
+                          <div className="form-floating">
+                            <input type="text" id="Nome" className="form-control" value={nome} onChange={(e) => setNome(e.target.value)} required />
+                            <label htmlFor="Nome">Nome</label>
+                          </div>
+                        </div>
+                        <div className="col-md-5 mb-4">
+                          <div className="form-floating">
+                            <input type="text" id="Cognome" className="form-control" value={cognome} onChange={(e) => setCognome(e.target.value)} required />
+                            <label htmlFor="Cognome">Cognome</label>
+                          </div>
+                        </div>
+                        <div className="col-md-2 mb-4">
+                          <div className="form-floating">
+                            <select className="form-select" id="sesso" value={sesso} onChange={(e) => setSesso(Number.parseInt(e.target.value))} required>
+                              <option value=""></option>
+                              <option value="0">M</option>
+                              <option value="1">F</option>
+                            </select>
+                            <label htmlFor="sesso">Sesso</label>
+                          </div>
                         </div>
                       </div>
-                      <div className="col-sm-6 me-0">
-                        <div className="float-sm-end">
-                          <ul className="pagination mb-sm-0">
-                            <li className="page-item disabled">
-                              <a href="#" className="page-link">
-                                <i className="bi bi-chevron-left"></i>
-                              </a>
-                            </li>
-                            <li className="page-item active">
-                              <a href="#" className="page-link">
-                                1
-                              </a>
-                            </li>
-                            <li className="page-item">
-                              <a href="#" className="page-link">
-                                2
-                              </a>
-                            </li>
-                            <li className="page-item">
-                              <a href="#" className="page-link">
-                                3
-                              </a>
-                            </li>
-                            <li className="page-item">
-                              <a href="#" className="page-link">
-                                4
-                              </a>
-                            </li>
-                            <li className="page-item">
-                              <a href="#" className="page-link">
-                                5
-                              </a>
-                            </li>
-                            <li className="page-item">
-                              <a href="#" className="page-link">
-                                <i className="bi bi-chevron-right"></i>
-                              </a>
-                            </li>
-                          </ul>
+                      <div className="row">
+                        <div className="col-md-4 mb-4">
+                          <div className="form-floating">
+                            <input type="date" id="DataNascita" className="form-control" value={dataNascita} onChange={(e) => setDataNascita(e.target.value)} required />
+                            <label htmlFor="DataNascita">Data di nascita</label>
+                          </div>
+                        </div>
+                        <div className="col-md-4 mb-4">
+                          <div className="form-floating">
+                            <input type="text" id="CodiceFiscale" className="form-control" value={codiceFiscale} onChange={(e) => setCodiceFiscale(e.target.value)} />
+                            <label htmlFor="CodiceFiscale">Codice fiscale</label>
+                          </div>
+                        </div>
+                        <div className="col-md-4 mb-4">
+                          <div className="form-floating">
+                            <select
+                              className="form-select"
+                              id="servizi"
+                              value={servizi[0]?.id ?? ""}
+                              onChange={(e) => {
+                                const trovato = tipologiaVisite?.find((t) => t.id === Number(e.target.value));
+                                if (trovato) setServizi([trovato]);
+                              }}
+                              required
+                            >
+                              <option value=""></option>
+                              {tipologiaVisite?.map((model) => (
+                                <option key={model.id} value={model.id}>
+                                  {model.descrizione}
+                                </option>
+                              ))}
+                            </select>
+                            <label htmlFor="servizi">Servizi</label>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                      <div className="form-floating mb-4">
+                        <input type="text" className="form-control" value={username} onChange={(e) => setUsername(e.target.value)} id="username" />
+                        <label htmlFor="username">username</label>
+                      </div>
+                      <div className="form-floating mb-4">
+                        <input type="password" className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} id="Password" />
+                        <label htmlFor="Password">Password</label>
+                      </div>
+                      <div className="row">
+                        <div className="d-flex justify-content-evenly">
+                          <button type="submit" className="btn btn-success btn-block mb-4">
+                            Registrati
+                          </button>
+                          <button type="button" className="btn btn-danger btn-block mb-4" onClick={() => getAllGenerico("Medici")}>
+                            Annulla
+                          </button>
+                        </div>
+                      </div>
+                    </form>
                   </div>
                 </div>
               </div>
             )}
-            {sezione === "anagrafica" && (
+            {sezioneContent === "anagrafica" && (
               /* Anagrafica */
               <div className="row g-0">
                 <div className={`col-6 p-3 ${styles.cardBorder}`}>

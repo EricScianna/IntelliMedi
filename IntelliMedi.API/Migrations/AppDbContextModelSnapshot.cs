@@ -213,6 +213,48 @@ namespace IntelliMedi.API.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("TipologieVisita");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Descrizione = "Visita sportiva"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Descrizione = "Ortopedia"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Descrizione = "Nutrizione"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Descrizione = "Cardiologia"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Descrizione = "Psicologia"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Descrizione = "Fisioterapia"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Descrizione = "Holter cardiaco"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Descrizione = "Onde d'urto"
+                        });
                 });
 
             modelBuilder.Entity("MedicoTipologiaVisita", b =>
