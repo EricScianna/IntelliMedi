@@ -190,9 +190,6 @@ function AreaPersonale() {
     });
 
     const dati = await risposta.json();
-    dati.dataNascita = new Date(dati.dataNascita).toLocaleDateString("it-IT");
-    if (dati.sesso == 0) dati.sesso = "Maschio";
-    else dati.sesso = "Femmina";
 
     setUser(dati);
     setsezioneContent("anagrafica");
@@ -292,6 +289,7 @@ function AreaPersonale() {
                 key={voce.etichetta}
                 className={`d-flex align-items-center btn ${styles.sidebarLink} text-decoration-none p-3 fs-5`}
                 onClick={() => {
+                  setTipoLista(voce.etichetta);
                   voce.link();
                 }}
               >
@@ -347,7 +345,6 @@ function AreaPersonale() {
                                 onClick={() => {
                                   getAllGenerico("TipologiaVisita");
                                   cambiaModalita("creaMedico");
-                                  console.log(users);
                                 }}
                               >
                                 <i className="bi-plus-lg"></i> Nuovo
@@ -407,7 +404,15 @@ function AreaPersonale() {
                                         <ul className="list-inline m-0 colonnaGestione">
                                           {colonna.tastoModifica && (
                                             <li className="list-inline-item">
-                                              <button className="btn px-2 text-primary" title="Modifica">
+                                              <button
+                                                className="btn px-2 text-primary"
+                                                title="Modifica"
+                                                onClick={() => {
+                                                  setUser(user);
+                                                  setsezioneContent("anagrafica");
+                                                  setSezioneAnagrafica("modifica");
+                                                }}
+                                              >
                                                 <i className="bi bi-pencil font-size-18"></i>
                                               </button>
                                             </li>
@@ -527,7 +532,6 @@ function AreaPersonale() {
                                 const trovato = tipologiaVisite?.find((t) => t.id === Number(e.target.value));
                                 if (trovato) setServizi([trovato]);
                               }}
-                              required
                             >
                               <option value=""></option>
                               {tipologiaVisite?.map((model) => (
@@ -589,11 +593,11 @@ function AreaPersonale() {
                             </tr>
                             <tr>
                               <th scope="row">Data di Nascita</th>
-                              <td>{user?.dataNascita}</td>
+                              <td>{new Date(user?.dataNascita ?? "").toLocaleDateString("it-IT")}</td>
                             </tr>
                             <tr>
                               <th scope="row">Sesso</th>
-                              <td>{user?.sesso} </td>
+                              <td>{user?.sesso === 0 ? "Maschio" : "Femmina"} </td>
                             </tr>
                           </tbody>
                         </table>
@@ -627,23 +631,31 @@ function AreaPersonale() {
                                   <input type="text" id="Cognome" className="form-control" defaultValue={user?.cognome} onChange={(e) => setCognome(e.target.value)} required />
                                 </td>
                               </tr>
+                              {tipoLista == "Medici" && (
+                                <tr>
+                                  <th scope="row">Servizi</th>
+                                  <td>
+                                    <input type="text" id="CodiceFiscale" className="form-control" defaultValue={user?.codiceFiscale ?? "/"} onChange={(e) => setCodiceFiscale(e.target.value)} />
+                                  </td>
+                                </tr>
+                              )}
                               <tr>
                                 <th scope="row">Codice Fiscale</th>
                                 <td>
-                                  <input
-                                    type="text"
-                                    id="CodiceFiscale"
-                                    className="form-control"
-                                    defaultValue={user?.codiceFiscale ?? "/"}
-                                    onChange={(e) => setCodiceFiscale(e.target.value)}
-                                    required
-                                  />
+                                  <input type="text" id="CodiceFiscale" className="form-control" defaultValue={user?.codiceFiscale ?? "/"} onChange={(e) => setCodiceFiscale(e.target.value)} />
                                 </td>
                               </tr>
                               <tr>
                                 <th scope="row">Data di Nascita</th>
                                 <td>
-                                  <input type="date" id="DataNascita" className="form-control" defaultValue={user?.dataNascita} onChange={(e) => setDataNascita(e.target.value)} required />
+                                  <input
+                                    type="date"
+                                    id="DataNascita"
+                                    className="form-control"
+                                    defaultValue={user?.dataNascita?.split("T")[0]}
+                                    onChange={(e) => setDataNascita(e.target.value)}
+                                    required
+                                  />
                                 </td>
                               </tr>
                               <tr>
