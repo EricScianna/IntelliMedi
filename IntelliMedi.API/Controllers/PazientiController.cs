@@ -71,7 +71,7 @@ public class PazientiController : ControllerBase
         {
             return NotFound();
         }
-
+        
         existingPaziente.Nome = modifica.Nome;
         existingPaziente.Cognome = modifica.Cognome;
         existingPaziente.CodiceFiscale = modifica.CodiceFiscale;

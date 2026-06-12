@@ -26,7 +26,7 @@ namespace IntelliMedi.API.Controllers
                 Id = m.Id,
                 Nome = m.Nome,
                 Cognome = m.Cognome,
-                TipologiaVisite = (m.TipologiaVisite?.ToList() ?? new List<TipologiaVisita>()).Select(t => t.Descrizione).ToList(),
+                TipologiaVisite = (m.TipologiaVisite?.ToList() ?? new List<TipologiaVisita>()).Select(t => new TipologiaVisitaDto { Id = t.Id, Descrizione = t.Descrizione }).ToList(),
                 Sesso = m.Sesso,
                 DataNascita = m.DataNascita,
                 CodiceFiscale = m.CodiceFiscale
@@ -53,7 +53,7 @@ namespace IntelliMedi.API.Controllers
 
             if (registrazione.TipologiaVisite != null)
             {
-                foreach (TipologiaVisita tipologia in registrazione.TipologiaVisite)
+                foreach (TipologiaVisitaDto tipologia in registrazione.TipologiaVisite)
                 {
                     var trovata = await _context.TipologieVisita.FindAsync(tipologia.Id);
                     if (trovata != null) listaTipologieVisite.Add(trovata);
@@ -78,25 +78,29 @@ namespace IntelliMedi.API.Controllers
 
         [HttpPut("{Id}")]
         [Authorize(Roles = "Amministratore")]
-        public async Task<IActionResult> Update(int id, Medico medico)
+        public async Task<IActionResult> Update(int id, ModificaAnagraficaRequest modifica)
         {
-            if (id != medico.Id)
-                BadRequest();
-
-            var existingMedico = await _context.Medici.FindAsync(id);
+            var existingMedico = await _context.Medici.Include(m => m.TipologiaVisite).FirstOrDefaultAsync(m => m.Id == id);
             if (existingMedico == null)
                 return NotFound();
 
-            existingMedico.Nome = medico.Nome;
-            existingMedico.Cognome = medico.Cognome;
-            existingMedico.CodiceFiscale = medico.CodiceFiscale;
-            existingMedico.DataNascita = medico.DataNascita;
-            existingMedico.Sesso = medico.Sesso;
-            existingMedico.Username = medico.Username;
-            existingMedico.PasswordHash = medico.PasswordHash;
-            existingMedico.Disponibilita = medico.Disponibilita;
-            existingMedico.Recensioni = medico.Recensioni;
-            existingMedico.TipologiaVisite = medico.TipologiaVisite;
+            List<TipologiaVisita> listaTipologieVisite = new List<TipologiaVisita>();
+
+            if (modifica.TipologiaVisite != null)
+            {
+                foreach (TipologiaVisitaDto dto in modifica.TipologiaVisite)
+                {
+                    var trovata = await _context.TipologieVisita.FindAsync(dto.Id);
+                    if (trovata != null) listaTipologieVisite.Add(trovata);
+                }
+            }
+
+            existingMedico.Nome = modifica.Nome;
+            existingMedico.Cognome = modifica.Cognome;
+            existingMedico.CodiceFiscale = modifica.CodiceFiscale;
+            existingMedico.DataNascita = modifica.DataNascita;
+            existingMedico.Sesso = modifica.Sesso;
+            existingMedico.TipologiaVisite = listaTipologieVisite;
 
             await _context.SaveChangesAsync();
             return NoContent();

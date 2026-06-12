@@ -9,7 +9,7 @@ interface User {
   id: number;
   nome: string;
   cognome: string;
-  tipologiaVisite?: string[];
+  tipologiaVisite?: TipologiaVisita[];
   dataNascita: string;
   sesso: number;
   codiceFiscale?: string;
@@ -29,6 +29,15 @@ interface VoceMenu {
   link: () => void;
 }
 
+interface Colonna {
+  etichetta: string;
+  buttonNew?: boolean;
+  tipologiaServizio?: boolean;
+  tastoModifica?: boolean;
+}
+
+const rottaPerRuolo: Record<string, string> = { Paziente: "Pazienti", Medico: "Medici" };
+
 function AreaPersonale() {
   // Stati per la gestione dei dati users
   const [nome, setNome] = useState("");
@@ -44,7 +53,6 @@ function AreaPersonale() {
   const [tipologiaVisite, setTipologiaVisite] = useState<TipologiaVisita[] | null>(null);
   // Stati per la gestione degli errori e successi
   const [errore, setErrore] = useState("");
-  const [successo, setSuccesso] = useState("");
   // Stati per la gestione della visualizzazione sezioni
   const navigate = useNavigate();
   const [sezioneContent, setsezioneContent] = useState<"cards" | "anagrafica" | "prenotazioni" | "recensioni" | "listaUtenti" | "creaMedico">("cards");
@@ -59,18 +67,26 @@ function AreaPersonale() {
   const inizio = (pagina - 1) * PER_PAGINA;
   const usersPagina = users?.slice(inizio, inizio + PER_PAGINA);
 
+  const [form, setForm] = useState<Omit<User, "id" | "username" | "password">>({
+    nome: "",
+    cognome: "",
+    tipologiaVisite: [],
+    dataNascita: "",
+    sesso: 0,
+    codiceFiscale: "",
+  });
+
   useEffect(() => {
     if (!localStorage.getItem("token")) {
       navigate("/login");
     }
   }, [navigate]);
 
-  interface Colonna {
-    etichetta: string;
-    buttonNew?: boolean;
-    tipologiaServizio?: boolean;
-    tastoModifica?: boolean;
-  }
+  useEffect(() => {
+    if (errore != "") {
+      setTimeout(() => setErrore(""), 3000);
+    }
+  }, [errore]);
 
   const colonnePerTipo: Record<string, Colonna[]> = {
     Medici: [{ etichetta: "Medici", buttonNew: true, tipologiaServizio: true, tastoModifica: true }],
@@ -115,12 +131,10 @@ function AreaPersonale() {
     setSesso(0);
     setDataNascita("");
     setCodiceFiscale("");
-    setErrore("");
   }
 
   async function creaMedico(e: React.SubmitEvent) {
     e.preventDefault();
-    setErrore("");
 
     const risposta = await fetch(`${API_URL}/api/Medici`, {
       method: "POST",
@@ -139,24 +153,30 @@ function AreaPersonale() {
   }
 
   async function getAllGenerico(sceltaModel: string) {
-    const risposta = await fetch(`${API_URL}/api/${sceltaModel}`, {
+    const risposta = await fetch(`${API_URL}/api/${sceltaModel}/${sceltaModel === "Pazienti" ? user?.id : ""}`, {
       method: "GET",
       headers: { Authorization: "Bearer " + localStorage.getItem("token") },
     });
 
     const listaModelsRisposta = await risposta.json();
-    if (risposta.ok) {
-      if (sceltaModel === "Pazienti" || sceltaModel === "Medici") {
-        setUsers(listaModelsRisposta);
-        setsezioneContent("listaUtenti");
-      }
-      if (sceltaModel === "TipologiaVisita") {
-        setTipologiaVisite(listaModelsRisposta);
-      }
+    if (!risposta.ok) setErrore("Dati non validi");
+    console.log(listaModelsRisposta);
+
+    if (sceltaModel === "TipologiaVisita") {
+      setTipologiaVisite(listaModelsRisposta);
+      return listaModelsRisposta;
+    }
+
+    if (sceltaModel === "Pazienti") {
+      setUser(listaModelsRisposta);
+      setsezioneContent("anagrafica");
       setTipoLista(sceltaModel);
-      setErrore("");
-    } else {
-      setErrore("Dati non validi");
+    }
+
+    if (sceltaModel === "Medici") {
+      setUsers(listaModelsRisposta);
+      setsezioneContent("listaUtenti");
+      setTipoLista(sceltaModel);
     }
   }
 
@@ -168,10 +188,8 @@ function AreaPersonale() {
 
     if (!risposta.ok) {
       setErrore("Errore nella cancellazione");
-      setSuccesso("");
       return;
     }
-    setErrore("");
     getAllGenerico(tipoLista);
   }
 
@@ -198,23 +216,24 @@ function AreaPersonale() {
   async function modificaAnagrafica(e: React.SubmitEvent) {
     e.preventDefault();
 
-    const risposta = await fetch(`${API_URL}/api/Pazienti/${localStorage.getItem("id")}`, {
+    const risposta = await fetch(`${API_URL}/api/${ruolo === "Amministratore" ? tipoLista : (rottaPerRuolo[ruolo] ?? "")}/${user?.id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer " + localStorage.getItem("token"),
       },
-      body: JSON.stringify({ nome, cognome, sesso, dataNascita, codiceFiscale }),
+      body: JSON.stringify(form),
     });
 
-    if (risposta.ok) {
+    if (!risposta.ok) {
+      setErrore("Errore nella modifica");
+      return;
+    }
+
+    if (tipoLista === "Medici") setsezioneContent("listaUtenti");
+    if (tipoLista === "Pazienti") {
       setSezioneAnagrafica("visualizza");
       mostraAnagrafica();
-      setSuccesso("Anagrafica aggiornata con successo");
-      setErrore("");
-    } else {
-      setErrore("Errore nell'aggiornamento dell'anagrafica");
-      setSuccesso("");
     }
   }
 
@@ -241,8 +260,6 @@ function AreaPersonale() {
               className="btn navbar-brand"
               onClick={() => {
                 setsezioneContent("cards");
-                setErrore("");
-                setSuccesso("");
               }}
             >
               <img src={logo} alt="Bootstrap" width="50" height="44" />
@@ -390,7 +407,7 @@ function AreaPersonale() {
                                     <tr key={user.id}>
                                       <td className="ps-4">{user.nome}</td>
                                       <td>{user.cognome}</td>
-                                      {colonna.tipologiaServizio && <td>{user.tipologiaVisite ? user.tipologiaVisite.join(", ") : "N/A"}</td>}
+                                      {colonna.tipologiaServizio && <td>{user.tipologiaVisite?.[0]?.descrizione ? user.tipologiaVisite[0].descrizione : "N/A"}</td>}
                                       <td>
                                         {new Date(user.dataNascita).toLocaleDateString("it-IT", {
                                           day: "2-digit",
@@ -408,9 +425,19 @@ function AreaPersonale() {
                                                 className="btn px-2 text-primary"
                                                 title="Modifica"
                                                 onClick={() => {
-                                                  setUser(user);
-                                                  setsezioneContent("anagrafica");
-                                                  setSezioneAnagrafica("modifica");
+                                                  getAllGenerico("TipologiaVisita").then(() => {
+                                                    setUser(user);
+                                                    setForm({
+                                                      nome: user?.nome ?? "",
+                                                      cognome: user?.cognome ?? "",
+                                                      tipologiaVisite: user?.tipologiaVisite ?? [],
+                                                      codiceFiscale: user?.codiceFiscale ?? "",
+                                                      sesso: user?.sesso ?? 0,
+                                                      dataNascita: user?.dataNascita ?? "",
+                                                    });
+                                                    setsezioneContent("anagrafica");
+                                                    setSezioneAnagrafica("modifica");
+                                                  });
                                                 }}
                                               >
                                                 <i className="bi bi-pencil font-size-18"></i>
@@ -436,7 +463,6 @@ function AreaPersonale() {
                             </div>
                           </div>
                         </div>
-                        {errore && <div className="invalid-tooltip">{errore}</div>}
                       </div>
                       <div className="p-3 row g-0 align-items-center pb-4">
                         <div className="col-sm-6">
@@ -484,7 +510,11 @@ function AreaPersonale() {
                 <div className=" card bg-body-tertiary">
                   <div className="card-body p-5 shadow-5 text-center">
                     <h2 className="fw-bold mb-5">Registra nuovo medico</h2>
-                    <form onSubmit={creaMedico}>
+                    <form
+                      onSubmit={(e) => {
+                        creaMedico(e).then(() => getAllGenerico("Medici"));
+                      }}
+                    >
                       <div className="row">
                         <div className="col-md-5 mb-4">
                           <div className="form-floating">
@@ -529,8 +559,8 @@ function AreaPersonale() {
                               id="servizi"
                               value={servizi[0]?.id ?? ""}
                               onChange={(e) => {
-                                const trovato = tipologiaVisite?.find((t) => t.id === Number(e.target.value));
-                                if (trovato) setServizi([trovato]);
+                                const servizio = tipologiaVisite?.find((t) => t.id === Number(e.target.value));
+                                if (servizio) setServizi([servizio]);
                               }}
                             >
                               <option value=""></option>
@@ -605,9 +635,15 @@ function AreaPersonale() {
                           type="button"
                           className="btn btn-primary"
                           onClick={() => {
+                            setForm({
+                              nome: user?.nome ?? "",
+                              cognome: user?.cognome ?? "",
+                              dataNascita: user?.dataNascita ?? "",
+                              codiceFiscale: user?.codiceFiscale ?? "",
+                              sesso: user?.sesso ?? 0,
+                              tipologiaVisite: user?.tipologiaVisite,
+                            });
                             setSezioneAnagrafica("modifica");
-                            setErrore("");
-                            setSuccesso("");
                           }}
                         >
                           Modifica
@@ -616,33 +652,58 @@ function AreaPersonale() {
                     )}
                     {sezioneAnagrafica === "modifica" && (
                       <div className="form-floating card-body">
-                        <form onSubmit={modificaAnagrafica}>
+                        <form
+                          onSubmit={(e) => {
+                            modificaAnagrafica(e).then(() => (ruolo == "Amministratore" ? getAllGenerico("Medici") : getAllGenerico("Pazienti")));
+                          }}
+                        >
                           <table className="table">
                             <tbody>
                               <tr>
                                 <th scope="row">Nome</th>
                                 <td>
-                                  <input type="text" id="Nome" className="form-control" defaultValue={user?.nome} onChange={(e) => setNome(e.target.value)} required />
+                                  <input type="text" id="Nome" className="form-control" value={form?.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required />
                                 </td>
                               </tr>
                               <tr>
                                 <th scope="row">Cognome</th>
                                 <td>
-                                  <input type="text" id="Cognome" className="form-control" defaultValue={user?.cognome} onChange={(e) => setCognome(e.target.value)} required />
+                                  <input type="text" id="Cognome" className="form-control" value={form?.cognome} onChange={(e) => setForm({ ...form, cognome: e.target.value })} required />
                                 </td>
                               </tr>
                               {tipoLista == "Medici" && (
                                 <tr>
                                   <th scope="row">Servizi</th>
                                   <td>
-                                    <input type="text" id="CodiceFiscale" className="form-control" defaultValue={user?.codiceFiscale ?? "/"} onChange={(e) => setCodiceFiscale(e.target.value)} />
+                                    <select
+                                      id="Servizi"
+                                      className="form-select"
+                                      value={form?.tipologiaVisite?.[0]?.id}
+                                      onChange={(e) => {
+                                        const servizio = tipologiaVisite?.find((t) => t.id === Number(e.target.value));
+                                        setForm({ ...form, tipologiaVisite: servizio ? [servizio] : [] });
+                                      }}
+                                    >
+                                      <option value=""></option>
+                                      {tipologiaVisite?.map((model) => (
+                                        <option key={model.id} value={model.id}>
+                                          {model.descrizione}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </td>
                                 </tr>
                               )}
                               <tr>
                                 <th scope="row">Codice Fiscale</th>
                                 <td>
-                                  <input type="text" id="CodiceFiscale" className="form-control" defaultValue={user?.codiceFiscale ?? "/"} onChange={(e) => setCodiceFiscale(e.target.value)} />
+                                  <input
+                                    type="text"
+                                    id="CodiceFiscale"
+                                    className="form-control"
+                                    value={form?.codiceFiscale ?? "/"}
+                                    onChange={(e) => setForm({ ...form, codiceFiscale: e.target.value })}
+                                  />
                                 </td>
                               </tr>
                               <tr>
@@ -652,8 +713,8 @@ function AreaPersonale() {
                                     type="date"
                                     id="DataNascita"
                                     className="form-control"
-                                    defaultValue={user?.dataNascita?.split("T")[0]}
-                                    onChange={(e) => setDataNascita(e.target.value)}
+                                    value={form?.dataNascita?.split("T")[0]}
+                                    onChange={(e) => setForm({ ...form, dataNascita: e.target.value })}
                                     required
                                   />
                                 </td>
@@ -661,7 +722,7 @@ function AreaPersonale() {
                               <tr>
                                 <th scope="row">Sesso</th>
                                 <td>
-                                  <select id="Sesso" className="form-control" defaultValue={user?.sesso} onChange={(e) => setSesso(Number.parseInt(e.target.value))} required>
+                                  <select id="Sesso" className="form-select" value={form?.sesso} onChange={(e) => setForm({ ...form, sesso: Number(e.target.value) })} required>
                                     <option value="">Seleziona</option>
                                     <option value="0">Maschio</option>
                                     <option value="1">Femmina</option>
@@ -670,10 +731,10 @@ function AreaPersonale() {
                               </tr>
                             </tbody>
                           </table>
-                          <button type="submit" className="btn btn-success me-5" onClick={mostraAnagrafica}>
-                            Accetta
+                          <button type="submit" className="btn btn-success me-5">
+                            Modifica
                           </button>
-                          <button type="button" className="btn btn-danger" onClick={() => setSezioneAnagrafica("visualizza")}>
+                          <button type="button" className="btn btn-danger" onClick={() => (ruolo == "Amministratore" ? setsezioneContent("listaUtenti") : setSezioneAnagrafica("visualizza"))}>
                             Annulla
                           </button>
                         </form>
@@ -684,8 +745,17 @@ function AreaPersonale() {
               </div>
             )}
           </div>
-          {successo && <div className="col-3 p-3 m-4 alert alert-success">{successo}</div>}
-          {errore && <div className="col-3 p-3 m-4 alert alert-danger">{errore}</div>}
+          {errore && (
+            <div className="toast-container position-fixed bottom-0 end-0 p-5">
+              <div className="toast show bg-warning" role="alert" aria-live="assertive" aria-atomic="true">
+                <div className="toast-header ">
+                  <strong className="me-auto">Errore</strong>
+                  <button type="button" className="btn-close" onClick={() => setErrore("")}></button>
+                </div>
+                <div className="toast-body">{errore}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
