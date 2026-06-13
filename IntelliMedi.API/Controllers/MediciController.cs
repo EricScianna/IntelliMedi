@@ -4,6 +4,8 @@ using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
+using System.Security.Claims;
 
 namespace IntelliMedi.API.Controllers
 {
@@ -21,25 +23,18 @@ namespace IntelliMedi.API.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<MedicoResponse>>> GetAll()
         {
-            return _context.Medici.Include(m => m.TipologiaVisite).ToList().Select(m => new MedicoResponse()
-            {
-                Id = m.Id,
-                Nome = m.Nome,
-                Cognome = m.Cognome,
-                TipologiaVisite = (m.TipologiaVisite?.ToList() ?? new List<TipologiaVisita>()).Select(t => new TipologiaVisitaDto { Id = t.Id, Descrizione = t.Descrizione }).ToList(),
-                Sesso = m.Sesso,
-                DataNascita = m.DataNascita,
-                CodiceFiscale = m.CodiceFiscale
-            }).ToList();
+            return _context.Medici.Include(m => m.TipologiaVisite).ToList().Select(MedicoToMedicoResponse).ToList();
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Medico>> GetById(int id)
+        public async Task<ActionResult<MedicoResponse>> GetById(int id)
         {
-            var medico = await _context.Medici.FindAsync(id);
-            if (medico == null)
+            var existingMedico = await _context.Medici.Include(m => m.TipologiaVisite).FirstOrDefaultAsync(m => m.Id == id);
+
+            if (existingMedico == null)
                 return NotFound();
-            return medico;
+
+            return MedicoToMedicoResponse(existingMedico);
         }
 
         [HttpPost]
@@ -76,23 +71,33 @@ namespace IntelliMedi.API.Controllers
             return Created();
         }
 
-        [HttpPut("{Id}")]
-        [Authorize(Roles = "Amministratore")]
+        [HttpPut("{id}")]
+        [Authorize(Roles = "Amministratore,Medico")]
         public async Task<IActionResult> Update(int id, ModificaAnagraficaRequest modifica)
         {
+            if (User.IsInRole("Medico"))
+            {
+                var idUtenteLoggato = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (idUtenteLoggato != id.ToString()) return Forbid();
+            }
+
             var existingMedico = await _context.Medici.Include(m => m.TipologiaVisite).FirstOrDefaultAsync(m => m.Id == id);
             if (existingMedico == null)
                 return NotFound();
 
-            List<TipologiaVisita> listaTipologieVisite = new List<TipologiaVisita>();
-
-            if (modifica.TipologiaVisite != null)
+            if (User.IsInRole("Amministratore"))
             {
-                foreach (TipologiaVisitaDto dto in modifica.TipologiaVisite)
+                List<TipologiaVisita> listaTipologieVisite = new List<TipologiaVisita>();
+
+                if (modifica.TipologiaVisite != null)
                 {
-                    var trovata = await _context.TipologieVisita.FindAsync(dto.Id);
-                    if (trovata != null) listaTipologieVisite.Add(trovata);
+                    foreach (TipologiaVisitaDto dto in modifica.TipologiaVisite)
+                    {
+                        var trovata = await _context.TipologieVisita.FindAsync(dto.Id);
+                        if (trovata != null) listaTipologieVisite.Add(trovata);
+                    }
                 }
+                existingMedico.TipologiaVisite = listaTipologieVisite;
             }
 
             existingMedico.Nome = modifica.Nome;
@@ -100,7 +105,6 @@ namespace IntelliMedi.API.Controllers
             existingMedico.CodiceFiscale = modifica.CodiceFiscale;
             existingMedico.DataNascita = modifica.DataNascita;
             existingMedico.Sesso = modifica.Sesso;
-            existingMedico.TipologiaVisite = listaTipologieVisite;
 
             await _context.SaveChangesAsync();
             return NoContent();
@@ -118,6 +122,21 @@ namespace IntelliMedi.API.Controllers
             _context.Medici.Remove(existingMedico);
             await _context.SaveChangesAsync();
             return NoContent();
+        }
+
+        private MedicoResponse MedicoToMedicoResponse(Medico medico)
+        {
+            MedicoResponse nuovoMedico = new MedicoResponse
+            {
+                Id = medico.Id,
+                Nome = medico.Nome,
+                Cognome = medico.Cognome,
+                TipologiaVisite = (medico.TipologiaVisite?.ToList() ?? new List<TipologiaVisita>()).Select(t => new TipologiaVisitaDto { Id = t.Id, Descrizione = t.Descrizione }).ToList(),
+                Sesso = medico.Sesso,
+                DataNascita = medico.DataNascita,
+                CodiceFiscale = medico.CodiceFiscale
+            };
+            return nuovoMedico;
         }
     }
 }

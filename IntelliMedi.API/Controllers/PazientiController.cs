@@ -62,10 +62,8 @@ public class PazientiController : ControllerBase
     public async Task<IActionResult> Update(int id, ModificaAnagraficaRequest modifica)
     {
         var idUtenteLoggato = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (idUtenteLoggato != id.ToString())
-        {
-            return Forbid();
-        }
+        if (idUtenteLoggato != id.ToString()) return Forbid();
+
         var existingPaziente = await _context.Pazienti.FindAsync(id);
         if (existingPaziente == null)
         {

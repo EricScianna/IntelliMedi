@@ -96,8 +96,8 @@ function AreaPersonale() {
 
   const vociPerRuolo: Record<string, VoceMenu[]> = {
     Amministratore: [
-      { etichetta: "Pazienti", descrizione: "Visualizza e gestisci i pazienti del sistema", immagine: "bi-people", link: () => getAllGenerico("Pazienti") },
-      { etichetta: "Medici", descrizione: "Visualizza e gestisci i medici del sistema", immagine: "bi-heart-pulse", link: () => getAllGenerico("Medici") },
+      { etichetta: "Pazienti", descrizione: "Visualizza e gestisci i pazienti del sistema", immagine: "bi-people", link: () => listaUtenti("Pazienti") },
+      { etichetta: "Medici", descrizione: "Visualizza e gestisci i medici del sistema", immagine: "bi-heart-pulse", link: () => listaUtenti("Medici") },
       { etichetta: "Prenotazioni", descrizione: "Visualizza e gestisci le prenotazioni", immagine: "bi-calendar-check", link: mostraPrenotazioni },
       { etichetta: "Recensioni", descrizione: "Modera le recensioni", immagine: "bi-star-fill", link: mostraRecensioni },
     ],
@@ -109,18 +109,14 @@ function AreaPersonale() {
     Medico: [
       { etichetta: "Anagrafica", descrizione: "Visualizza e modifica i tuoi dati personali", immagine: "bi-person", link: mostraAnagrafica },
       { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: mostraPrenotazioni },
-      { etichetta: "Recensisci", descrizione: "Recensisci i servizi ricevuti", immagine: "bi-star-fill", link: mostraRecensioni },
+      { etichetta: "Recensioni", descrizione: "Visualizza recensioni ricevute", immagine: "bi-star-fill", link: mostraRecensioni },
     ],
   };
 
   const ruolo = localStorage.getItem("ruolo") ?? "";
   const vociSidebar = vociPerRuolo[ruolo] ?? [];
   const colClass = vociSidebar.length > 3 ? "col-5 g-5" : "col-3";
-
-  if (ruolo == "Amministratore") {
-    localStorage.setItem("nome", "Amministratore");
-    localStorage.setItem("cognome", "");
-  }
+  const nomeVisualizzato = ruolo === "Amministratore" ? "Amministratore" : `${localStorage.getItem("nome")} ${localStorage.getItem("cognome")}`;
 
   function cambiaModalita(sezione: "listaUtenti" | "creaMedico") {
     setsezioneContent(sezione);
@@ -146,38 +142,69 @@ function AreaPersonale() {
     });
 
     if (risposta.ok) {
-      getAllGenerico("Medici");
+      getGenerico("Medici");
     } else {
       setErrore("Utente già esistente o dati non validi");
     }
   }
 
-  async function getAllGenerico(sceltaModel: string) {
-    const risposta = await fetch(`${API_URL}/api/${sceltaModel}/${sceltaModel === "Pazienti" ? user?.id : ""}`, {
+  async function getGenerico(percorso: string) {
+    const risposta = await fetch(`${API_URL}/api/${percorso}`, {
       method: "GET",
       headers: { Authorization: "Bearer " + localStorage.getItem("token") },
     });
 
-    const listaModelsRisposta = await risposta.json();
-    if (!risposta.ok) setErrore("Dati non validi");
-    console.log(listaModelsRisposta);
-
-    if (sceltaModel === "TipologiaVisita") {
-      setTipologiaVisite(listaModelsRisposta);
-      return listaModelsRisposta;
+    if (!risposta.ok) {
+      setErrore("Dati non validi");
+      return;
     }
+    return risposta.json();
+  }
 
-    if (sceltaModel === "Pazienti") {
-      setUser(listaModelsRisposta);
-      setsezioneContent("anagrafica");
-      setTipoLista(sceltaModel);
-    }
+  async function putGenerico(percorso: string) {
+    const risposta = await fetch(`${API_URL}/api/${percorso}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+      body: JSON.stringify(form),
+    });
 
-    if (sceltaModel === "Medici") {
-      setUsers(listaModelsRisposta);
-      setsezioneContent("listaUtenti");
-      setTipoLista(sceltaModel);
-    }
+    if (!risposta.ok) setErrore("Errore nella modifica");
+  }
+
+  async function mostraAnagrafica() {
+    const dati = await getGenerico(`${rottaPerRuolo[ruolo]}/${localStorage.getItem("id")}`);
+    setUser(dati);
+    setsezioneContent("anagrafica");
+    setTipoLista(rottaPerRuolo[ruolo]);
+  }
+
+  async function listaUtenti(tipoUtente: string) {
+    const dati = await getGenerico(`${tipoUtente}`);
+    setUsers(dati);
+    setsezioneContent("listaUtenti");
+    setTipoLista(tipoUtente);
+  }
+
+  async function listaTipologiaVisita() {
+    const dati = await getGenerico("TipologiaVisita");
+    setTipologiaVisite(dati);
+    return dati;
+  }
+
+  async function modificaAnagrafica(e: React.SubmitEvent) {
+    e.preventDefault();
+    await putGenerico(`${rottaPerRuolo[ruolo]}/${user?.id}`);
+    setSezioneAnagrafica("visualizza");
+    await mostraAnagrafica();
+  }
+
+  async function modificalistaUtenti(e: React.SubmitEvent) {
+    e.preventDefault();
+    await putGenerico(`${tipoLista}/${user?.id}`);
+    listaUtenti(tipoLista);
   }
 
   async function cancellaUser(id: string) {
@@ -190,52 +217,35 @@ function AreaPersonale() {
       setErrore("Errore nella cancellazione");
       return;
     }
-    getAllGenerico(tipoLista);
+    listaUtenti(tipoLista);
   }
 
   async function mostraPrenotazioni() {}
   async function mostraRecensioni() {}
 
-  async function mostraAnagrafica() {
-    let userEndPoint = "";
+  // async function modificaAnagrafica(e: React.SubmitEvent) {
+  //   e.preventDefault();
 
-    if (localStorage.getItem("ruolo") == "Paziente") {
-      userEndPoint = `https://localhost:7223/api/pazienti/`;
-    }
-    const risposta = await fetch(userEndPoint + localStorage.getItem("id"), {
-      method: "GET",
-      headers: { Authorization: "Bearer " + localStorage.getItem("token") },
-    });
+  //   const risposta = await fetch(`${API_URL}/api/${ruolo === "Amministratore" ? tipoLista : (rottaPerRuolo[ruolo] ?? "")}/${user?.id}`, {
+  //     method: "PUT",
+  //     headers: {
+  //       "Content-Type": "application/json",
+  //       Authorization: "Bearer " + localStorage.getItem("token"),
+  //     },
+  //     body: JSON.stringify(form),
+  //   });
 
-    const dati = await risposta.json();
+  //   if (!risposta.ok) {
+  //     setErrore("Errore nella modifica");
+  //     return;
+  //   }
 
-    setUser(dati);
-    setsezioneContent("anagrafica");
-  }
-
-  async function modificaAnagrafica(e: React.SubmitEvent) {
-    e.preventDefault();
-
-    const risposta = await fetch(`${API_URL}/api/${ruolo === "Amministratore" ? tipoLista : (rottaPerRuolo[ruolo] ?? "")}/${user?.id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + localStorage.getItem("token"),
-      },
-      body: JSON.stringify(form),
-    });
-
-    if (!risposta.ok) {
-      setErrore("Errore nella modifica");
-      return;
-    }
-
-    if (tipoLista === "Medici") setsezioneContent("listaUtenti");
-    if (tipoLista === "Pazienti") {
-      setSezioneAnagrafica("visualizza");
-      mostraAnagrafica();
-    }
-  }
+  //   if (tipoLista === "Medici") setsezioneContent("listaUtenti");
+  //   if (tipoLista === "Pazienti") {
+  //     setSezioneAnagrafica("visualizza");
+  //     mostraAnagrafica();
+  //   }
+  // }
 
   function eseguiLogout() {
     localStorage.removeItem("token");
@@ -277,9 +287,7 @@ function AreaPersonale() {
             </button>
             <div className="collapse navbar-collapse" id="navbarSupportedContent">
               <div className="d-flex align-items-center gap-2 ms-5 fs-4">
-                <span>
-                  Area riservata di {localStorage.getItem("nome")} {localStorage.getItem("cognome")}
-                </span>
+                <span>Area riservata di {nomeVisualizzato}</span>
               </div>
               <ul className="navbar-nav mb-2 mb-lg-0 ms-auto">
                 <li className="nav-item ">
@@ -360,7 +368,7 @@ function AreaPersonale() {
                                 data-bs-toggle="modal"
                                 data-bs-target="#modalNew"
                                 onClick={() => {
-                                  getAllGenerico("TipologiaVisita");
+                                  listaTipologiaVisita();
                                   cambiaModalita("creaMedico");
                                 }}
                               >
@@ -425,7 +433,7 @@ function AreaPersonale() {
                                                 className="btn px-2 text-primary"
                                                 title="Modifica"
                                                 onClick={() => {
-                                                  getAllGenerico("TipologiaVisita").then(() => {
+                                                  listaTipologiaVisita().then(() => {
                                                     setUser(user);
                                                     setForm({
                                                       nome: user?.nome ?? "",
@@ -512,7 +520,7 @@ function AreaPersonale() {
                     <h2 className="fw-bold mb-5">Registra nuovo medico</h2>
                     <form
                       onSubmit={(e) => {
-                        creaMedico(e).then(() => getAllGenerico("Medici"));
+                        creaMedico(e).then(() => listaUtenti("Medici"));
                       }}
                     >
                       <div className="row">
@@ -587,7 +595,7 @@ function AreaPersonale() {
                           <button type="submit" className="btn btn-success btn-block mb-4">
                             Registrati
                           </button>
-                          <button type="button" className="btn btn-danger btn-block mb-4" onClick={() => getAllGenerico("Medici")}>
+                          <button type="button" className="btn btn-danger btn-block mb-4" onClick={() => listaUtenti("Medici")}>
                             Annulla
                           </button>
                         </div>
@@ -617,6 +625,12 @@ function AreaPersonale() {
                               <th scope="row">Cognome</th>
                               <td>{user?.cognome}</td>
                             </tr>
+                            {ruolo == "Medico" && (
+                              <tr>
+                                <th scope="row">Servizi</th>
+                                <td>{user?.tipologiaVisite?.[0]?.descrizione}</td>
+                              </tr>
+                            )}
                             <tr>
                               <th scope="row">Codice Fiscale</th>
                               <td>{user?.codiceFiscale ?? "/"}</td>
@@ -635,15 +649,17 @@ function AreaPersonale() {
                           type="button"
                           className="btn btn-primary"
                           onClick={() => {
-                            setForm({
-                              nome: user?.nome ?? "",
-                              cognome: user?.cognome ?? "",
-                              dataNascita: user?.dataNascita ?? "",
-                              codiceFiscale: user?.codiceFiscale ?? "",
-                              sesso: user?.sesso ?? 0,
-                              tipologiaVisite: user?.tipologiaVisite,
+                            listaTipologiaVisita().then(() => {
+                              setForm({
+                                nome: user?.nome ?? "",
+                                cognome: user?.cognome ?? "",
+                                dataNascita: user?.dataNascita ?? "",
+                                codiceFiscale: user?.codiceFiscale ?? "",
+                                sesso: user?.sesso ?? 0,
+                                tipologiaVisite: user?.tipologiaVisite ?? [],
+                              });
+                              setSezioneAnagrafica("modifica");
                             });
-                            setSezioneAnagrafica("modifica");
                           }}
                         >
                           Modifica
@@ -654,7 +670,8 @@ function AreaPersonale() {
                       <div className="form-floating card-body">
                         <form
                           onSubmit={(e) => {
-                            modificaAnagrafica(e).then(() => (ruolo == "Amministratore" ? getAllGenerico("Medici") : getAllGenerico("Pazienti")));
+                            if (ruolo === "Amministratore") modificalistaUtenti(e);
+                            else modificaAnagrafica(e);
                           }}
                         >
                           <table className="table">
@@ -675,15 +692,7 @@ function AreaPersonale() {
                                 <tr>
                                   <th scope="row">Servizi</th>
                                   <td>
-                                    <select
-                                      id="Servizi"
-                                      className="form-select"
-                                      value={form?.tipologiaVisite?.[0]?.id}
-                                      onChange={(e) => {
-                                        const servizio = tipologiaVisite?.find((t) => t.id === Number(e.target.value));
-                                        setForm({ ...form, tipologiaVisite: servizio ? [servizio] : [] });
-                                      }}
-                                    >
+                                    <select disabled id="Servizi" className="form-select disabled" value={form?.tipologiaVisite?.[0]?.id}>
                                       <option value=""></option>
                                       {tipologiaVisite?.map((model) => (
                                         <option key={model.id} value={model.id}>
