@@ -1,10 +1,8 @@
 ﻿using IntelliMedi.API.Data;
-using IntelliMedi.API.Migrations;
 using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Data;
 using System.Security.Claims;
 
 namespace IntelliMedi.API.Controllers
@@ -23,7 +21,8 @@ namespace IntelliMedi.API.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<MedicoResponse>>> GetAll()
         {
-            return _context.Medici.Include(m => m.TipologiaVisite).ToList().Select(MedicoToMedicoResponse).ToList();
+            var lista = await _context.Medici.Include(m => m.TipologiaVisite).ToListAsync();
+            return lista.Select(MedicoToMedicoResponse).ToList();
         }
 
         [HttpGet("{id}")]
@@ -43,6 +42,9 @@ namespace IntelliMedi.API.Controllers
         {
             if (_context.Medici.Any(p => p.Username == registrazione.Username))
                 return BadRequest();
+
+            if (_context.Medici.Any(p => p.CodiceFiscale == registrazione.CodiceFiscale))
+                return BadRequest("Codice fiscale già registrato");
 
             List<TipologiaVisita> listaTipologieVisite = new List<TipologiaVisita>();
 
@@ -81,9 +83,11 @@ namespace IntelliMedi.API.Controllers
                 if (idUtenteLoggato != id.ToString()) return Forbid();
             }
 
+            if (_context.Medici.Any(p => p.CodiceFiscale == modifica.CodiceFiscale && p.Id != id))
+                return BadRequest("Codice fiscale già registrato");
+
             var existingMedico = await _context.Medici.Include(m => m.TipologiaVisite).FirstOrDefaultAsync(m => m.Id == id);
-            if (existingMedico == null)
-                return NotFound();
+            if (existingMedico == null) return NotFound();
 
             if (User.IsInRole("Amministratore"))
             {

@@ -1,6 +1,6 @@
 ﻿namespace IntelliMedi.API.Models
 {
-    public enum Sesso { M, F, Altro };
+    public enum Sesso { M, F, NonSpecificato };
 
     public abstract class Persona : Utente
     {

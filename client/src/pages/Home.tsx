@@ -177,7 +177,7 @@ function Home() {
       </section>
       <div className="container">
         <div className="row">
-          <div className="col-sm-12 col-md-6fs-5 fw-light">
+          <div className="col-sm-12 col-md-6 fs-5 fw-light">
             <p className="my-5">
               Medisport è un poliambulatorio medico specialistico che opera sul territorio chivassese dal 1991. La nostra mission è quella di offrire un sempre maggiore e costante impegno e attenzione
               alla persona, intesa nella sua pluralità, al fine di progettare ed attuare le migliori strategie di cura monitorandone lo stato di salute e i miglioramenti ottenuti.

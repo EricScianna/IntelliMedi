@@ -1,6 +1,4 @@
-﻿using IntelliMedi.API.Migrations;
-
-namespace IntelliMedi.API.Models
+﻿namespace IntelliMedi.API.Models
 {
     public class MedicoResponse
     {
