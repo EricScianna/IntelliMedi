@@ -95,6 +95,24 @@
   transform: rotate(180deg);
 }
 
+/* per avere separazione tra le celle*/
+.tableSpace {
+  border-collapse: separate;
+  border-spacing: 8px;
+}
+
+.cellStyle {
+  height: 50px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.cellStyle:hover {
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  opacity: 0.7;
+}
+
 .projectListTable {
   border-collapse: separate;
   border-spacing: 0 12px;

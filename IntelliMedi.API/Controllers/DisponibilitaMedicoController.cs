@@ -17,6 +17,31 @@ namespace IntelliMedi.API.Controllers
             _context = context;
         }
 
+        //ASP.NET ha bisogno di decoratori diversi per richiamare il giusto metodo
+        //l'URL sarà: GET /api/DisponibilitaMedico/GetSingleDay?medicoId=3&data=2026-06-23
+        [HttpGet("GetSingleDay")]
+        public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetSingleDay(int medicoId, DateOnly data)
+        {
+            //LINQ usa where per filtrare gli elementi di disponibilitaMedici con:
+            //MedicoId uguale a quello del medico ricevuto
+            //stesso giorno della settimana ricevuto
+            return await _context.DisponibilitaMedici
+            .Where(d => d.MedicoId == medicoId && d.Giorno == data.DayOfWeek)
+            .ToListAsync();
+        }
+
+        //ASP.NET ha bisogno di decoratori diversi per richiamare il giusto metodo
+        //l'URL sarà: GET /api/DisponibilitaMedico/GetAllDays
+        [HttpGet("GetAllDays")]
+        public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetAllDays(int medicoId)
+        {
+            //LINQ usa where per filtrare gli elementi di disponibilitaMedici con:
+            //MedicoId uguale a quello del medico ricevuto
+            return await _context.DisponibilitaMedici
+            .Where(d => d.MedicoId == medicoId)
+            .ToListAsync();
+        }
+
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetAll()
         {
@@ -34,11 +59,18 @@ namespace IntelliMedi.API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(DisponibilitaMedico DisponibilitaMedico)
+        public async Task<IActionResult> Create(DisponibilitaMedicoRequest registrazione)
         {
-            _context.DisponibilitaMedici.Add(DisponibilitaMedico);
+            DisponibilitaMedico disponibilitaMedico = new DisponibilitaMedico
+            {
+                Giorno = registrazione.Giorno,
+                MedicoId = registrazione.MedicoId,
+                OraInizio = registrazione.OraInizio,
+                OraFine = registrazione.OraFine
+            };
+            _context.DisponibilitaMedici.Add(disponibilitaMedico);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetById), new { id = DisponibilitaMedico.Id }, DisponibilitaMedico);
+            return CreatedAtAction(nameof(GetById), new { id = disponibilitaMedico.Id }, disponibilitaMedico);
         }
 
         [HttpPut("{id}")]

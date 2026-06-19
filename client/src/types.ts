@@ -16,3 +16,12 @@ export interface User {
   username?: string;
   password?: string;
 }
+
+export interface DisponibilitaMedico {
+  id: number;
+  medicoId: number;
+  medico?: User;
+  giorno: number;
+  oraInizio: string;
+  oraFine: string;
+}

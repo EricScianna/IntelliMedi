@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import styles from "./AreaPersonale.module.css";
 import stylesShared from "../shared.module.css";
 import logo from "../assets/logo2.png";
-import type { DatiForm, TipologiaVisita, User } from "../types";
+import type { DatiForm, TipologiaVisita, User, DisponibilitaMedico } from "../types";
 import { API_URL, SESSO_LABELS, FORM_VUOTO } from "../constants";
 import { useErrore } from "../hooks/useErrore";
 import FormDatiUtente from "../components/FormDatiUtente";
@@ -23,6 +23,19 @@ interface Colonna {
   onNuovo?: () => void;
   tipologiaServizio?: boolean;
   onModificaInLista?: (utente: User) => void;
+}
+
+//riceve in input gli orari del medico e li inserisce in un array
+function generaOrari(oraInizio: string, oraFine: string): number[] {
+  const inizio = oraInizio.split(":", 1);
+  const fine = oraFine.split(":", 1);
+  const inizioInt = Number.parseInt(inizio[0]);
+  const fineInt = Number.parseInt(fine[0]);
+  const arrayOrari: number[] = [];
+  for (let i = inizioInt; i < fineInt; i++) {
+    arrayOrari.push(i);
+  }
+  return arrayOrari;
 }
 
 function AreaPersonale() {
@@ -48,6 +61,42 @@ function AreaPersonale() {
   const totalePagineUtenti = Math.ceil(totaleUsers / USERS_PER_PAGINA);
   const inizioPaginaUtenti = (indicePagina - 1) * USERS_PER_PAGINA;
   const usersPagina = users?.slice(inizioPaginaUtenti, inizioPaginaUtenti + USERS_PER_PAGINA);
+  // Stati per la gestione delle prenotazioni
+  const [lunediCorrente, setLunediCorrente] = useState<Date>(() => {
+    const oggi = new Date();
+    const g = oggi.getDay();
+    const offset = g === 0 ? 6 : g - 1;
+    oggi.setDate(oggi.getDate() - offset);
+    return oggi;
+  });
+
+  const [disponibilitaMedico, setDisponibilitaMedico] = useState<DisponibilitaMedico[] | null>(null);
+  function oreDisponibiliDelGiorno(giorno: number): number[] {
+    // filtra disponibilitaMedico per il giorno richiesto, poi flatMap con generaOrari
+    const oreDisponibili = disponibilitaMedico?.filter((d) => d.giorno === giorno).flatMap((d) => generaOrari(d.oraInizio, d.oraFine)) ?? [];
+    return oreDisponibili;
+  }
+
+  function settimanaSuccessiva() {
+    const lunediCopia = new Date(lunediCorrente);
+    lunediCopia.setDate(lunediCopia.getDate() + 7);
+    setLunediCorrente(lunediCopia);
+  }
+
+  function settimanaPrecedente() {
+    const lunediCopia = new Date(lunediCorrente);
+    lunediCopia.setDate(lunediCopia.getDate() - 7);
+    setLunediCorrente(lunediCopia);
+  }
+
+  const giorniSettimana: Date[] = Array.from({ length: 7 }, (_, i) => {
+    const lunediCopia = new Date(lunediCorrente);
+    lunediCopia.setDate(lunediCopia.getDate() + i);
+    return lunediCopia;
+  });
+
+  //ore totali in griglia: 8/19
+  const grigliaOre = Array.from({ length: 12 }, (_, i) => i + 8);
 
   useEffect(() => {
     if (!localStorage.getItem("token")) {
@@ -100,7 +149,7 @@ function AreaPersonale() {
   const ruolo = localStorage.getItem("ruolo") ?? "";
   const vociSidebar = vociPerRuolo[ruolo] ?? [];
   const colClass = vociSidebar.length > 3 ? "col-5 g-5" : "col-3";
-  const nomeVisualizzato = ruolo === "Amministratore" ? "Amministratore" : `${localStorage.getItem("nome")} ${localStorage.getItem("cognome")}`;
+  const nomeVisualizzato = ruolo === "Amministratore" ? "Amministratore" : `${user?.nome} ${user?.cognome}`;
 
   function createHeaders(hasContentType: boolean) {
     const headers: Record<string, string> = {
@@ -160,6 +209,23 @@ function AreaPersonale() {
 
     if (risposta.ok) return true;
     setErrore("Utente già esistente o dati non validi");
+    return false;
+  }
+
+  async function postDisponibilita(giorno: Date, ora: number) {
+    const medicoId = Number(localStorage.getItem("id"));
+    // template literal = modo di scrivere stringhe usando i backtick ` (alt+096) invece degli apici ' o ".
+    // dentro posso infilare espressioni con ${...}
+    const oraInizio = `${ora.toString().padStart(2, "0")}:00:00`;
+    const oraFine = `${(ora + 1).toString().padStart(2, "0")}:00:00`;
+    const risposta = await fetch(`${API_URL}/api/DisponibilitaMedico`, {
+      method: "POST",
+      headers: createHeaders(true),
+      body: JSON.stringify({ medicoId, giorno: giorno.getDay(), oraInizio, oraFine }),
+    });
+
+    if (risposta.ok) return true;
+    setErrore("Errore");
     return false;
   }
 
@@ -227,7 +293,28 @@ function AreaPersonale() {
     mostraListaUtenti(tipoLista);
   }
 
-  async function mostraPrenotazioni() {}
+  async function caricaDisponibilita() {
+    const dati = await getGenerico(`DisponibilitaMedico/GetAllDays?medicoId=${localStorage.getItem("id")}`);
+    setDisponibilitaMedico(dati);
+  }
+
+  async function mostraPrenotazioni() {
+    caricaDisponibilita();
+    setSezioneContent("prenotazioni");
+    setTipoLista("DisponibilitaMedico");
+  }
+
+  async function creaCasella(giorno: Date, ora: number) {
+    const verde = oreDisponibiliDelGiorno(giorno.getDay()).includes(ora);
+    if (verde) {
+      deleteGenerico();
+    } else {
+      //caricaDisponibilita solo se andato a buon fine
+      const ok = await postDisponibilita(giorno, ora);
+      if (ok) await caricaDisponibilita();
+    }
+  }
+
   async function mostraRecensioni() {}
 
   function eseguiLogout() {
@@ -332,6 +419,14 @@ function AreaPersonale() {
                 </div>
               </div>
             )}
+            {sezioneContent === "prenotazioni" && (
+              <Prenotazioni
+                giorniSettimana={giorniSettimana}
+                grigliaOre={grigliaOre}
+                isVerde={(giorno, ora) => oreDisponibiliDelGiorno(giorno.getDay()).includes(ora)}
+                onClickCasella={creaCasella}
+              ></Prenotazioni>
+            )}
           </div>
           {errore && <Avvisi errore={errore} clickChiudi={() => setErrore("")} />}
         </div>
@@ -340,6 +435,8 @@ function AreaPersonale() {
   );
 }
 
+// ----------------- COMPONENTI -----------------
+// function Nome ({destructuring dei parametri. React passa le props}: Readonly<{tipo oggetto. TypeScript. Dopo : descrive la forma del parametro}>)
 function Header({ clickCards, nomeVisualizzato, clickLogout }: Readonly<{ clickCards: () => void; nomeVisualizzato: string; clickLogout: () => void }>) {
   return (
     <header className="header">
@@ -718,6 +815,132 @@ function ModificaAnagrafica({
           Annulla
         </button>
       </form>
+    </div>
+  );
+}
+function Prenotazioni({
+  giorniSettimana,
+  grigliaOre,
+  isVerde,
+  onClickCasella,
+}: Readonly<{ giorniSettimana: Date[]; grigliaOre: number[]; isVerde: (giorno: Date, ora: number) => boolean; onClickCasella: (giorno: Date, ora: number) => void }>) {
+  return (
+    <div className="row g-0">
+      <div className={`p-3  ${stylesShared.cardBorder}`}>
+        <div className={`card ${styles.projectListTableColor}`}>
+          <div className={`card-header text-white ${styles.titleMedisport}`}>
+            <div className="row">
+              <div className="col-6">
+                <h5 className="m-2">Calendario prenotazioni</h5>
+              </div>
+              <div className="col-6 d-flex justify-content-end">
+                <button className="btn btn-success">
+                  <i className="bi-plus-lg"></i> Aggiungi disponibilità
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="row">
+            <div className="col-lg-12">
+              <div className="">
+                <div className="table-responsive">
+                  <div className="d-flex align-items-center gap-4 px-3 py-2">
+                    <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la tua disponibilità.</span>
+
+                    <span className="d-flex align-items-center gap-2">
+                      <span className="d-inline-block rounded bg-light" style={{ width: 16, height: 16 }}></span>
+                      Libera
+                    </span>
+
+                    <span className="d-flex align-items-center gap-2">
+                      <span className="d-inline-block rounded bg-success" style={{ width: 16, height: 16 }}></span>
+                      Disponibile
+                    </span>
+
+                    <span className="d-flex align-items-center gap-2">
+                      <span className="d-inline-block rounded border bg-danger" style={{ width: 16, height: 16 }}></span>
+                      Visita confermata
+                    </span>
+                  </div>
+                  <table className={`table ${styles.tableSpace} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
+                    <thead>
+                      <tr>
+                        <th></th>
+                        {giorniSettimana.map((giorno) => (
+                          <th key={giorno.toISOString()} scope="col" className={`ps-4`}>
+                            {giorno.toLocaleDateString("it-IT", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              weekday: "short",
+                            })}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grigliaOre.map((ora) => (
+                        <tr key={ora}>
+                          <th scope="row">{ora.toString().padStart(2, "0")}:00</th>
+                          {giorniSettimana.map((giorno) => {
+                            const verde = isVerde(giorno, ora);
+                            // onClick invia al padre onClickCasella con i valori (giorno, ora)
+                            return (
+                              <td
+                                title={verde ? "Clicca per rimuovere" : "Clicca per rendere disponibile"}
+                                key={giorno.toISOString()}
+                                className={`${styles.cellStyle} ${verde ? "bg-success" : "bg-light"}`}
+                                onClick={() => onClickCasella(giorno, ora)}
+                              ></td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            {/* </div>
+          <div className="p-3 row g-0 align-items-center pb-4">
+            <div className="col-sm-6">
+              <div>
+                <p className="mb-sm-0">
+                  Mostrando {totaleUsers === 0 ? 0 : inizioPaginaUtenti + 1} a {Math.min(inizioPaginaUtenti + USERS_PER_PAGINA, totaleUsers)} di {totaleUsers} totali
+                </p>
+              </div>
+            </div>
+            <div className="col-sm-6 me-0">
+              <div className="float-sm-end">
+                <ul className="pagination mb-sm-0">
+                  <li className={`page-item ${indicePagina <= 1 ? "disabled" : ""}`}>
+                    <button className="btn page-link" onClick={() => onCambiaPagina(indicePagina - 1)} disabled={indicePagina <= 1}>
+                      <i className="bi bi-chevron-left"></i>
+                    </button>
+                  </li>
+                  <li className="page-item">
+                    <div className="btn-toolbar" role="toolbar">
+                      <div className="btn-group">
+                        {Array.from({ length: totalePagineUtenti }, (_, indice) => (
+                          <button key={indice} className={`btn btn-primary ${indicePagina === indice + 1 ? "active" : ""}`} onClick={() => onCambiaPagina(indice + 1)}>
+                            {indice + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </li>
+                  <li className={`page-item ${indicePagina >= totalePagineUtenti ? "disabled" : ""}`}>
+                    <button className="btn page-link" onClick={() => onCambiaPagina(indicePagina + 1)} disabled={indicePagina >= totalePagineUtenti}>
+                      <i className="bi bi-chevron-right"></i>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </div>*/}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
