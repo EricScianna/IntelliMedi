@@ -35,7 +35,6 @@ function Login() {
 
     if (!risposta.ok) {
       setErrore("Username o password non corretti");
-
       return;
     }
 
@@ -44,8 +43,6 @@ function Login() {
     localStorage.setItem("token", dati.token);
     localStorage.setItem("id", String(dati.utente.id));
     localStorage.setItem("ruolo", dati.utente.ruolo);
-    localStorage.setItem("nome", dati.utente.nome);
-    localStorage.setItem("cognome", dati.utente.cognome);
 
     navigate("/area-personale");
   }

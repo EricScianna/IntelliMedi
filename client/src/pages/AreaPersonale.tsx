@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./AreaPersonale.module.css";
 import stylesShared from "../shared.module.css";
 import logo from "../assets/logo2.png";
 import type { DatiForm, TipologiaVisita, User, DisponibilitaMedico } from "../types";
-import { API_URL, SESSO_LABELS, FORM_VUOTO } from "../constants";
+import { API_URL, SESSO_LABELS, FORM_VUOTO, GIORNI_SETTIMANA } from "../constants";
 import { useErrore } from "../hooks/useErrore";
 import FormDatiUtente from "../components/FormDatiUtente";
 import Avvisi from "../components/Avvisi";
@@ -38,6 +38,9 @@ function generaOrari(oraInizio: string, oraFine: string): number[] {
   return arrayOrari;
 }
 
+//COMPONENTE: AreaPersonale (PascalCase obbligatorio): funzione principale di una pagina React.
+//tranne useState, tutto quello che c'è all'interno viene ricreato ad ogni render
+//Ogni setState prenota un render, il valore si aggiorna solo al render successivo
 function AreaPersonale() {
   // Stati per la gestione dei dati users
   const [form, setForm] = useState<DatiForm>(FORM_VUOTO);
@@ -46,6 +49,7 @@ function AreaPersonale() {
   const [user, setUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[] | null>(null);
   const [tipologiaVisite, setTipologiaVisite] = useState<TipologiaVisita[] | null>(null);
+  const [idUserSelezionato, setIdUserSelezionato] = useState("");
   // Stati per la gestione degli errori
   const { errore, setErrore } = useErrore();
   // Stati per la gestione della visualizzazione sezioni
@@ -62,6 +66,9 @@ function AreaPersonale() {
   const inizioPaginaUtenti = (indicePagina - 1) * USERS_PER_PAGINA;
   const usersPagina = users?.slice(inizioPaginaUtenti, inizioPaginaUtenti + USERS_PER_PAGINA);
   // Stati per la gestione delle prenotazioni
+  const [tipologiaSelezionata, setTipologiaSelezionata] = useState<number | null>(null);
+
+  const [disponibilitaMedico, setDisponibilitaMedico] = useState<DisponibilitaMedico[] | null>(null);
   const [lunediCorrente, setLunediCorrente] = useState<Date>(() => {
     const oggi = new Date();
     const g = oggi.getDay();
@@ -69,40 +76,6 @@ function AreaPersonale() {
     oggi.setDate(oggi.getDate() - offset);
     return oggi;
   });
-
-  const [disponibilitaMedico, setDisponibilitaMedico] = useState<DisponibilitaMedico[] | null>(null);
-  function oreDisponibiliDelGiorno(giorno: number): number[] {
-    // filtra disponibilitaMedico per il giorno richiesto, poi flatMap con generaOrari
-    const oreDisponibili = disponibilitaMedico?.filter((d) => d.giorno === giorno).flatMap((d) => generaOrari(d.oraInizio, d.oraFine)) ?? [];
-    return oreDisponibili;
-  }
-
-  function settimanaSuccessiva() {
-    const lunediCopia = new Date(lunediCorrente);
-    lunediCopia.setDate(lunediCopia.getDate() + 7);
-    setLunediCorrente(lunediCopia);
-  }
-
-  function settimanaPrecedente() {
-    const lunediCopia = new Date(lunediCorrente);
-    lunediCopia.setDate(lunediCopia.getDate() - 7);
-    setLunediCorrente(lunediCopia);
-  }
-
-  const giorniSettimana: Date[] = Array.from({ length: 7 }, (_, i) => {
-    const lunediCopia = new Date(lunediCorrente);
-    lunediCopia.setDate(lunediCopia.getDate() + i);
-    return lunediCopia;
-  });
-
-  //ore totali in griglia: 8/19
-  const grigliaOre = Array.from({ length: 12 }, (_, i) => i + 8);
-
-  useEffect(() => {
-    if (!localStorage.getItem("token")) {
-      navigate("/login");
-    }
-  }, [navigate]);
 
   const colonnePerTipo: Record<string, Colonna> = {
     Medici: {
@@ -136,22 +109,29 @@ function AreaPersonale() {
     ],
     Paziente: [
       { etichetta: "Anagrafica", descrizione: "Visualizza e modifica i tuoi dati personali", immagine: "bi-person", link: mostraAnagrafica },
-      { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: mostraPrenotazioni },
+      { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: () => mostraPrenotazioni(medicoIdCalendario ?? "") },
       { etichetta: "Recensisci", descrizione: "Recensisci i servizi ricevuti", immagine: "bi-star-fill", link: mostraRecensioni },
     ],
     Medico: [
       { etichetta: "Anagrafica", descrizione: "Visualizza e modifica i tuoi dati personali", immagine: "bi-person", link: mostraAnagrafica },
-      { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: mostraPrenotazioni },
+      { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: () => mostraPrenotazioni(medicoIdCalendario ?? "") },
       { etichetta: "Recensioni", descrizione: "Visualizza recensioni ricevute", immagine: "bi-star-fill", link: mostraRecensioni },
     ],
   };
-
   const ruolo = localStorage.getItem("ruolo") ?? "";
+  const medicoIdCalendario = ruolo === "Amministratore" ? idUserSelezionato : localStorage.getItem("id");
   const vociSidebar = vociPerRuolo[ruolo] ?? [];
   const colClass = vociSidebar.length > 3 ? "col-5 g-5" : "col-3";
   const nomeVisualizzato = ruolo === "Amministratore" ? "Amministratore" : `${user?.nome} ${user?.cognome}`;
 
-  function createHeaders(hasContentType: boolean) {
+  const isPaziente = ruolo === "Paziente";
+  const isMedico = ruolo === "Medico";
+  const isAdmin = ruolo === "Amministratore";
+  const puoModificareDisponibilita = isMedico || isAdmin;
+  const prenotaComePaziente = isPaziente;
+
+  //creazione headers del metodi CRUD
+  const createHeaders = useCallback((hasContentType: boolean) => {
     const headers: Record<string, string> = {
       Authorization: "Bearer " + localStorage.getItem("token"),
     };
@@ -160,7 +140,124 @@ function AreaPersonale() {
       headers["Content-Type"] = "application/json";
     }
     return headers;
+  }, []);
+
+  function oreDisponibiliDelGiorno(giorno: number): number[] {
+    // filtra disponibilitaMedico per il giorno richiesto, poi flatMap con generaOrari
+    const oreDisponibili = disponibilitaMedico?.filter((d) => d.giorno === giorno).flatMap((d) => generaOrari(d.oraInizio, d.oraFine)) ?? [];
+    return oreDisponibili;
   }
+
+  function settimanaSuccessiva() {
+    const lunediCopia = new Date(lunediCorrente);
+    lunediCopia.setDate(lunediCopia.getDate() + 7);
+    setLunediCorrente(lunediCopia);
+  }
+
+  function settimanaPrecedente() {
+    const lunediCopia = new Date(lunediCorrente);
+    lunediCopia.setDate(lunediCopia.getDate() - 7);
+    setLunediCorrente(lunediCopia);
+  }
+
+  const giorniSettimana: Date[] = Array.from({ length: 7 }, (_, i) => {
+    const lunediCopia = new Date(lunediCorrente);
+    lunediCopia.setDate(lunediCopia.getDate() + i);
+    return lunediCopia;
+  });
+
+  //ore totali in griglia: 8/19
+  const grigliaOre = Array.from({ length: 12 }, (_, i) => i + 8);
+
+  //vecchia intenstazione: async function getGenerico(percorso: string) {
+  //ho dovuto rendere stabile getGenerico con useCallback. setErrore è un set (quindi stabile), ma inserito nelle dipendenze perché arriva da un custom hook
+  const getGenerico = useCallback(
+    async (percorso: string) => {
+      const risposta = await fetch(`${API_URL}/api/${percorso}`, {
+        method: "GET",
+        headers: createHeaders(false),
+      });
+
+      if (risposta.ok) return risposta.json();
+      setErrore("Dati non validi");
+      return false;
+    },
+    [createHeaders, setErrore],
+  );
+
+  async function postGenerico() {
+    const risposta = await fetch(`${API_URL}/api/${tipoLista}`, {
+      method: "POST",
+      headers: createHeaders(true),
+      body: JSON.stringify({ ...form, username, password }),
+    });
+
+    if (risposta.ok) return true;
+    setErrore("Utente già esistente o dati non validi");
+    return false;
+  }
+
+  async function postDisponibilita(giorno: number, ora: number) {
+    const medicoId = medicoIdCalendario;
+    // template literal = modo di scrivere stringhe usando i backtick ` (alt+096) invece degli apici ' o ".
+    // dentro posso infilare espressioni con ${...}
+    const oraInizio = `${ora.toString().padStart(2, "0")}:00:00`;
+    const oraFine = `${(ora + 1).toString().padStart(2, "0")}:00:00`;
+    const risposta = await fetch(`${API_URL}/api/DisponibilitaMedico`, {
+      method: "POST",
+      headers: createHeaders(true),
+      body: JSON.stringify({ medicoId, giorno, oraInizio, oraFine }),
+    });
+
+    if (risposta.ok) return true;
+    setErrore("Errore");
+    return false;
+  }
+
+  async function putGenerico(percorso: string) {
+    const risposta = await fetch(`${API_URL}/api/${percorso}`, {
+      method: "PUT",
+      headers: createHeaders(true),
+      body: JSON.stringify(form),
+    });
+
+    if (risposta.ok) return true;
+    setErrore("Errore nella modifica");
+    return false;
+  }
+
+  async function deleteGenerico(id: string) {
+    console.log(tipoLista);
+    const risposta = await fetch(`${API_URL}/api/${tipoLista}/${id}`, {
+      method: "DELETE",
+      headers: createHeaders(false),
+    });
+
+    if (risposta.ok) return true;
+    setErrore("Errore nella cancellazione");
+    return false;
+  }
+
+  //useCallback: il componente mantiene la funzione tra un render e l'altro, ne crea una nuova solo se cambia una delle dipendenze ([])
+  const caricaUser = useCallback(async () => {
+    const dati = await getGenerico(`${rottaPerRuolo[ruolo]}/${localStorage.getItem("id")}`);
+    setUser(dati);
+  }, [ruolo, getGenerico]);
+
+  // useEffect è un hook di React, esegue un effetto collaterale (fetch, log ecc) dopo il render
+  // l'array in fondo sono le dipendenze, l'effetto si riesegue solo quando uno di quei valori cambia
+  // [] una volta, al montaggio
+  // [a, b] quando a oppure b cambiano
+  // assente: dopo ogni render
+  // "exhaustive-deps" è il nome di una regola di ESLint, elenca tutto ciò che l'effetto usa dal componente, così rigira con i valori aggiornati
+  useEffect(() => {
+    if (!localStorage.getItem("token")) {
+      navigate("/login");
+    } else if (localStorage.getItem("ruolo") !== "Amministratore") {
+      //eslint-disable-next-line react-hooks/set-state-in-effect
+      caricaUser();
+    }
+  }, [navigate, caricaUser]);
 
   function setFormFromUser(utente: User) {
     setForm({
@@ -187,70 +284,8 @@ function AreaPersonale() {
     });
   }
 
-  async function getGenerico(percorso: string) {
-    const risposta = await fetch(`${API_URL}/api/${percorso}`, {
-      method: "GET",
-      headers: createHeaders(false),
-    });
-
-    if (!risposta.ok) {
-      setErrore("Dati non validi");
-      return;
-    }
-    return risposta.json();
-  }
-
-  async function postGenerico() {
-    const risposta = await fetch(`${API_URL}/api/${tipoLista}`, {
-      method: "POST",
-      headers: createHeaders(true),
-      body: JSON.stringify({ ...form, username, password }),
-    });
-
-    if (risposta.ok) return true;
-    setErrore("Utente già esistente o dati non validi");
-    return false;
-  }
-
-  async function postDisponibilita(giorno: Date, ora: number) {
-    const medicoId = Number(localStorage.getItem("id"));
-    // template literal = modo di scrivere stringhe usando i backtick ` (alt+096) invece degli apici ' o ".
-    // dentro posso infilare espressioni con ${...}
-    const oraInizio = `${ora.toString().padStart(2, "0")}:00:00`;
-    const oraFine = `${(ora + 1).toString().padStart(2, "0")}:00:00`;
-    const risposta = await fetch(`${API_URL}/api/DisponibilitaMedico`, {
-      method: "POST",
-      headers: createHeaders(true),
-      body: JSON.stringify({ medicoId, giorno: giorno.getDay(), oraInizio, oraFine }),
-    });
-
-    if (risposta.ok) return true;
-    setErrore("Errore");
-    return false;
-  }
-
-  async function putGenerico(percorso: string) {
-    const risposta = await fetch(`${API_URL}/api/${percorso}`, {
-      method: "PUT",
-      headers: createHeaders(true),
-      body: JSON.stringify(form),
-    });
-
-    if (!risposta.ok) setErrore("Errore nella modifica");
-  }
-
-  async function deleteGenerico(id: string) {
-    const risposta = await fetch(`${API_URL}/api/${tipoLista}/${id}`, {
-      method: "DELETE",
-      headers: createHeaders(false),
-    });
-
-    if (!risposta.ok) setErrore("Errore nella cancellazione");
-  }
-
   async function mostraAnagrafica() {
-    const dati = await getGenerico(`${rottaPerRuolo[ruolo]}/${localStorage.getItem("id")}`);
-    setUser(dati);
+    caricaUser();
     setSezioneContent("anagrafica");
     setTipoLista(rottaPerRuolo[ruolo]);
   }
@@ -293,26 +328,56 @@ function AreaPersonale() {
     mostraListaUtenti(tipoLista);
   }
 
-  async function caricaDisponibilita() {
-    const dati = await getGenerico(`DisponibilitaMedico/GetAllDays?medicoId=${localStorage.getItem("id")}`);
+  async function caricaDisponibilitaPerMedico(id: string) {
+    const dati = await getGenerico(`DisponibilitaMedico/GetAllDays?medicoId=${id}`);
+    setDisponibilitaMedico(dati);
+  }
+  async function caricaDisponibilitaPerTipologia(id: string) {
+    const dati = await getGenerico(`DisponibilitaMedico/GetByTipologia?tipologiaId=${id}`);
     setDisponibilitaMedico(dati);
   }
 
-  async function mostraPrenotazioni() {
-    caricaDisponibilita();
+  async function mostraPrenotazioni(id: string) {
+    if (isPaziente) {
+      setTipologiaSelezionata(null);
+      caricaListaTipologiaVisita();
+    }
+    if (isMedico || isAdmin) {
+      caricaDisponibilitaPerMedico(id);
+      setTipoLista("DisponibilitaMedico");
+    }
     setSezioneContent("prenotazioni");
-    setTipoLista("DisponibilitaMedico");
   }
 
-  async function creaCasella(giorno: Date, ora: number) {
+  async function gestisciCella(giorno: Date, ora: number) {
+    let ok;
     const verde = oreDisponibiliDelGiorno(giorno.getDay()).includes(ora);
     if (verde) {
-      deleteGenerico();
+      const cella = disponibilitaMedico?.find((d) => d.giorno === giorno.getDay() && Number.parseInt(d.oraInizio) === ora);
+      if (cella !== undefined) {
+        ok = await deleteGenerico(cella.id.toString());
+      }
     } else {
-      //caricaDisponibilita solo se andato a buon fine
-      const ok = await postDisponibilita(giorno, ora);
-      if (ok) await caricaDisponibilita();
+      ok = await postDisponibilita(giorno.getDay(), ora);
     }
+    //caricaDisponibilitaPerMedico solo se andato a buon fine
+    if (ok) await caricaDisponibilitaPerMedico(medicoIdCalendario ?? "");
+  }
+
+  async function aggiungiPiuDisponibilita(giorno: number, oraInizio: number, oraFine: number) {
+    if (oraInizio > oraFine) {
+      setErrore("Inserire un range di orari valido");
+      return;
+    }
+    let ok = false;
+    for (let i = oraInizio; i <= oraFine; i++) {
+      const verde = oreDisponibiliDelGiorno(giorno).includes(i);
+      if (!verde) {
+        const esito = await postDisponibilita(giorno, i);
+        if (esito) ok = true; // una volta true, resta true
+      }
+    }
+    if (ok) await caricaDisponibilitaPerMedico(medicoIdCalendario ?? "");
   }
 
   async function mostraRecensioni() {}
@@ -359,6 +424,10 @@ function AreaPersonale() {
                 indicePagina={indicePagina}
                 onCambiaPagina={setIndicePagina}
                 totalePagineUtenti={totalePagineUtenti}
+                onVisualizzaPrenotazione={(id) => {
+                  mostraPrenotazioni(id);
+                  setIdUserSelezionato(id);
+                }}
               ></ListaUtenti>
             )}
             {sezioneContent === "creaMedico" && (
@@ -421,10 +490,16 @@ function AreaPersonale() {
             )}
             {sezioneContent === "prenotazioni" && (
               <Prenotazioni
+                isPaziente={isPaziente}
+                tipologiaSelezionata={tipologiaSelezionata}
+                onAggiungiFascia={aggiungiPiuDisponibilita}
                 giorniSettimana={giorniSettimana}
                 grigliaOre={grigliaOre}
                 isVerde={(giorno, ora) => oreDisponibiliDelGiorno(giorno.getDay()).includes(ora)}
-                onClickCasella={creaCasella}
+                onClickCasella={(giorno, ora) => gestisciCella(giorno, ora)}
+                caricaDisponibilitaPerTipologia={caricaDisponibilitaPerTipologia}
+                setTipologiaSelezionata={setTipologiaSelezionata}
+                tipologiaVisite={tipologiaVisite}
               ></Prenotazioni>
             )}
           </div>
@@ -473,7 +548,6 @@ function Header({ clickCards, nomeVisualizzato, clickLogout }: Readonly<{ clickC
     </header>
   );
 }
-
 function Sidebar({ sidebarChiusa, clickToggleSidebar, vociSidebar }: Readonly<{ sidebarChiusa: boolean; clickToggleSidebar: () => void; vociSidebar: VoceMenu[] }>) {
   return (
     <nav className={`${styles.sidebar} flex-shrink-0 p-3 ${sidebarChiusa ? "collapsed" : ""}`} aria-label="Sidebar">
@@ -497,7 +571,6 @@ function Sidebar({ sidebarChiusa, clickToggleSidebar, vociSidebar }: Readonly<{ 
     </nav>
   );
 }
-
 function Cards({ vociSidebar, colClass }: Readonly<{ vociSidebar: VoceMenu[]; colClass: string }>) {
   return (
     <div className="row justify-content-evenly">
@@ -521,7 +594,6 @@ function Cards({ vociSidebar, colClass }: Readonly<{ vociSidebar: VoceMenu[]; co
     </div>
   );
 }
-
 function ListaUtenti({
   tipoLista,
   totaleUsers,
@@ -535,6 +607,7 @@ function ListaUtenti({
   indicePagina,
   onCambiaPagina,
   totalePagineUtenti,
+  onVisualizzaPrenotazione,
 }: Readonly<{
   tipoLista: string;
   totaleUsers: number;
@@ -548,6 +621,7 @@ function ListaUtenti({
   indicePagina: number;
   onCambiaPagina: (numeroPagina: number) => void;
   totalePagineUtenti: number;
+  onVisualizzaPrenotazione: (idUtente: string) => void;
 }>) {
   return (
     <div className="row g-0">
@@ -614,7 +688,7 @@ function ListaUtenti({
                               year: "numeric",
                             })}
                           </td>
-                          <td>{user.sesso ?? SESSO_LABELS[user.sesso]}</td>
+                          <td>{SESSO_LABELS[user.sesso]}</td>
                           <td>{user.codiceFiscale ?? "N/A"}</td>
                           <td>
                             <ul className="list-inline m-0">
@@ -626,7 +700,7 @@ function ListaUtenti({
                                 </li>
                               )}
                               <li className="list-inline-item">
-                                <button className="btn px-2 text-success" title="Prenotazioni attive">
+                                <button className="btn px-2 text-success" title="Prenotazioni attive" onClick={() => onVisualizzaPrenotazione(user.id.toString())}>
                                   <i className="bi-calendar-check"></i>
                                 </button>
                               </li>
@@ -725,7 +799,6 @@ function VisualizzaAnagrafica({ utente, mostraServizi, clickModificaInAnagrafica
     </div>
   );
 }
-
 function ModificaAnagrafica({
   submitAnagrafica,
   form,
@@ -819,126 +892,228 @@ function ModificaAnagrafica({
   );
 }
 function Prenotazioni({
+  isPaziente,
+  tipologiaSelezionata,
+  onAggiungiFascia,
   giorniSettimana,
   grigliaOre,
   isVerde,
   onClickCasella,
-}: Readonly<{ giorniSettimana: Date[]; grigliaOre: number[]; isVerde: (giorno: Date, ora: number) => boolean; onClickCasella: (giorno: Date, ora: number) => void }>) {
+  setTipologiaSelezionata,
+  caricaDisponibilitaPerTipologia,
+  tipologiaVisite,
+}: Readonly<{
+  isPaziente: boolean;
+  tipologiaSelezionata: number | null;
+  onAggiungiFascia: (giorno: number, oraInizio: number, oraFine: number) => void;
+  giorniSettimana: Date[];
+  grigliaOre: number[];
+  isVerde: (giorno: Date, ora: number) => boolean;
+  onClickCasella: (giorno: Date, ora: number) => void;
+  setTipologiaSelezionata: (id: number) => void;
+  caricaDisponibilitaPerTipologia: (id: string) => void;
+  tipologiaVisite: TipologiaVisita[] | null;
+}>) {
+  const [mostraFormFasciaDisponibilita, setMostraFormFasciaDisponibilita] = useState(false);
+  const [mostraFormTipologiaVisita, setMostraFormTipologiaVisita] = useState(false);
+  const [giornoGestioneDisponibilita, setGiornoGestioneDisponibilita] = useState(1);
+  const [oraInizioGestioneDisponibilita, setOraInizioGestioneDisponibilita] = useState(8);
+  const [oraFineGestioneDisponibilita, setOraFineGestioneDisponibilita] = useState(19);
   return (
-    <div className="row g-0">
-      <div className={`p-3  ${stylesShared.cardBorder}`}>
-        <div className={`card ${styles.projectListTableColor}`}>
-          <div className={`card-header text-white ${styles.titleMedisport}`}>
-            <div className="row">
-              <div className="col-6">
-                <h5 className="m-2">Calendario prenotazioni</h5>
-              </div>
-              <div className="col-6 d-flex justify-content-end">
-                <button className="btn btn-success">
-                  <i className="bi-plus-lg"></i> Aggiungi disponibilità
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="row">
-            <div className="col-lg-12">
-              <div className="">
-                <div className="table-responsive">
-                  <div className="d-flex align-items-center gap-4 px-3 py-2">
-                    <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la tua disponibilità.</span>
-
-                    <span className="d-flex align-items-center gap-2">
-                      <span className="d-inline-block rounded bg-light" style={{ width: 16, height: 16 }}></span>
-                      Libera
-                    </span>
-
-                    <span className="d-flex align-items-center gap-2">
-                      <span className="d-inline-block rounded bg-success" style={{ width: 16, height: 16 }}></span>
-                      Disponibile
-                    </span>
-
-                    <span className="d-flex align-items-center gap-2">
-                      <span className="d-inline-block rounded border bg-danger" style={{ width: 16, height: 16 }}></span>
-                      Visita confermata
-                    </span>
+    <div className={styles.prenotazioniContainer}>
+      <div className="row g-0">
+        <div className={`p-3  ${stylesShared.cardBorder}`}>
+          {(!isPaziente || tipologiaSelezionata !== null) && (
+            <div className={`card ${styles.projectListTableColor}`}>
+              <div className={`card-header text-white ${styles.titleMedisport}`}>
+                <div className="row">
+                  <div className="col-6">
+                    <h5 className="m-2">Calendario prenotazioni</h5>
                   </div>
-                  <table className={`table ${styles.tableSpace} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
-                    <thead>
-                      <tr>
-                        <th></th>
-                        {giorniSettimana.map((giorno) => (
-                          <th key={giorno.toISOString()} scope="col" className={`ps-4`}>
-                            {giorno.toLocaleDateString("it-IT", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                              weekday: "short",
-                            })}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {grigliaOre.map((ora) => (
-                        <tr key={ora}>
-                          <th scope="row">{ora.toString().padStart(2, "0")}:00</th>
-                          {giorniSettimana.map((giorno) => {
-                            const verde = isVerde(giorno, ora);
-                            // onClick invia al padre onClickCasella con i valori (giorno, ora)
-                            return (
-                              <td
-                                title={verde ? "Clicca per rimuovere" : "Clicca per rendere disponibile"}
-                                key={giorno.toISOString()}
-                                className={`${styles.cellStyle} ${verde ? "bg-success" : "bg-light"}`}
-                                onClick={() => onClickCasella(giorno, ora)}
-                              ></td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="col-6 d-flex justify-content-end">
+                    {!isPaziente && (
+                      <button className="btn btn-success" onClick={() => setMostraFormFasciaDisponibilita((v) => !v)}>
+                        <i className="bi-plus-lg"></i> Fascia oraria
+                      </button>
+                    )}
+                    {isPaziente && (
+                      <button className="btn btn-success" onClick={() => setMostraFormTipologiaVisita((v) => !v)}>
+                        <i className="bi-plus-lg"></i> Scegli tipologia visita
+                      </button>
+                    )}
+                    {mostraFormFasciaDisponibilita && (
+                      <div className={`${styles.pannelloDisponibilita} me-4`}>
+                        <div className={`d-flex gap-3 align-items-end p-3 ${stylesShared.cardBorder}`}>
+                          <div>
+                            <label htmlFor="selGiorno" className="form-label">
+                              Giorno
+                            </label>
+                            <select id="selGiorno" className="form-select" value={giornoGestioneDisponibilita} onChange={(e) => setGiornoGestioneDisponibilita(Number(e.target.value))}>
+                              {GIORNI_SETTIMANA.map((giorno) => (
+                                <option key={giorno.indice} value={giorno.indice}>
+                                  {giorno.nome}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor="selOraInizio" className="form-label">
+                              Dalle
+                            </label>
+                            <select id="selOraInizio" className="form-select" value={oraInizioGestioneDisponibilita} onChange={(e) => setOraInizioGestioneDisponibilita(Number(e.target.value))}>
+                              {grigliaOre.map((ora) => (
+                                <option key={ora} value={ora}>
+                                  {ora.toString().padStart(2, "0")}:00
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor="selOraFine" className="form-label">
+                              Alle
+                            </label>
+                            <select id="selOraFine" className="form-select" value={oraFineGestioneDisponibilita} onChange={(e) => setOraFineGestioneDisponibilita(Number(e.target.value))}>
+                              {grigliaOre.map((ora) => (
+                                <option key={ora} value={ora}>
+                                  {ora.toString().padStart(2, "0")}:00
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-success"
+                            onClick={() => {
+                              onAggiungiFascia(giornoGestioneDisponibilita, oraInizioGestioneDisponibilita, oraFineGestioneDisponibilita);
+                              setMostraFormFasciaDisponibilita(false);
+                            }}
+                          >
+                            <i className="bi-check-lg"></i> Conferma
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {mostraFormTipologiaVisita && (
+                      <div className={`${styles.pannelloDisponibilita} me-4`}>
+                        <div className={`d-flex gap-3 align-items-end p-3 ${stylesShared.cardBorder}`}>
+                          <select
+                            id="selTipologia"
+                            className="form-select"
+                            value={tipologiaSelezionata ?? ""}
+                            onChange={(e) => {
+                              const id = Number(e.target.value);
+                              setTipologiaSelezionata(id);
+                              caricaDisponibilitaPerTipologia(id.toString());
+                              setMostraFormTipologiaVisita(false);
+                            }}
+                          >
+                            <option value="">—</option>
+                            {tipologiaVisite?.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.descrizione}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="row">
+                <div className="col-lg-12">
+                  <div className="">
+                    <div className="table-responsive">
+                      {!isPaziente && (
+                        <div className="d-flex align-items-center gap-4 px-3 py-2">
+                          <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la tua disponibilità.</span>
+                          <span className="d-flex align-items-center gap-2">
+                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-light`}></span>
+                            <span> Libera</span>
+                          </span>
+                          <span className="d-flex align-items-center gap-2">
+                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-success`}></span>
+                            <span>Disponibile </span>
+                          </span>
+                          <span className="d-flex align-items-center gap-2">
+                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-danger`}></span>
+                            <span> Visita confermata</span>
+                          </span>
+                        </div>
+                      )}
+                      {isPaziente && (
+                        <div className="d-flex align-items-center gap-4 px-3 py-2">
+                          <span className="text-muted">Clicca su una casella verde per prenotare la visita.</span>
+                        </div>
+                      )}
+                      <table className={`table ${styles.tableSpace} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
+                        <thead>
+                          <tr>
+                            <th></th>
+                            {giorniSettimana.map((giorno) => (
+                              <th key={giorno.toISOString()} scope="col" className={`ps-4`}>
+                                {giorno.toLocaleDateString("it-IT", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  weekday: "short",
+                                })}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {grigliaOre.map((ora) => (
+                            <tr key={ora}>
+                              <th scope="row">{ora.toString().padStart(2, "0")}:00</th>
+                              {giorniSettimana.map((giorno) => {
+                                const verde = isVerde(giorno, ora);
+                                // onClick invia al padre onClickCasella con i valori (giorno, ora)
+                                return (
+                                  <td
+                                    title={verde ? "Clicca per rimuovere" : "Clicca per rendere disponibile"}
+                                    key={giorno.toISOString()}
+                                    className={`${styles.cellStyle} ${verde ? "bg-success" : "bg-light"}`}
+                                    onClick={() => onClickCasella(giorno, ora)}
+                                  ></td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            {/* </div>
-          <div className="p-3 row g-0 align-items-center pb-4">
-            <div className="col-sm-6">
-              <div>
-                <p className="mb-sm-0">
-                  Mostrando {totaleUsers === 0 ? 0 : inizioPaginaUtenti + 1} a {Math.min(inizioPaginaUtenti + USERS_PER_PAGINA, totaleUsers)} di {totaleUsers} totali
-                </p>
+          )}
+          {isPaziente && tipologiaSelezionata === null && (
+            <div className="card">
+              <div className={`card-header text-white ${styles.titleMedisport}`}>
+                <h5 className="m-2">Prenota la tua visita</h5>
+              </div>
+              <div className="p-3">
+                <select
+                  id="selTipologia"
+                  className="form-select"
+                  value={tipologiaSelezionata ?? ""}
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    setTipologiaSelezionata(id);
+                    caricaDisponibilitaPerTipologia(id.toString());
+                  }}
+                >
+                  <option value="">—</option>
+                  {tipologiaVisite?.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.descrizione}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-            <div className="col-sm-6 me-0">
-              <div className="float-sm-end">
-                <ul className="pagination mb-sm-0">
-                  <li className={`page-item ${indicePagina <= 1 ? "disabled" : ""}`}>
-                    <button className="btn page-link" onClick={() => onCambiaPagina(indicePagina - 1)} disabled={indicePagina <= 1}>
-                      <i className="bi bi-chevron-left"></i>
-                    </button>
-                  </li>
-                  <li className="page-item">
-                    <div className="btn-toolbar" role="toolbar">
-                      <div className="btn-group">
-                        {Array.from({ length: totalePagineUtenti }, (_, indice) => (
-                          <button key={indice} className={`btn btn-primary ${indicePagina === indice + 1 ? "active" : ""}`} onClick={() => onCambiaPagina(indice + 1)}>
-                            {indice + 1}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </li>
-                  <li className={`page-item ${indicePagina >= totalePagineUtenti ? "disabled" : ""}`}>
-                    <button className="btn page-link" onClick={() => onCambiaPagina(indicePagina + 1)} disabled={indicePagina >= totalePagineUtenti}>
-                      <i className="bi bi-chevron-right"></i>
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            </div>*/}
-          </div>
+          )}
         </div>
       </div>
     </div>

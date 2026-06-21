@@ -2,3 +2,7 @@
   background-color: #ccdfcd;
   border-radius: 10px;
 }
+
+.prenotaBar {
+  position: relative;
+}

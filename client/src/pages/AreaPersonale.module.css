@@ -113,6 +113,28 @@
   opacity: 0.7;
 }
 
+.tabellaPrenotazioniLegenda {
+  border: 1px solid #000000;
+  width: 16px;
+  height: 16px;
+}
+
+.prenotazioniContainer {
+  position: relative;
+}
+
+.pannelloDisponibilita {
+  position: absolute;
+  top: 9%; 
+  right: 0;
+  z-index: 0; 
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+}
+
 .projectListTable {
   border-collapse: separate;
   border-spacing: 0 12px;

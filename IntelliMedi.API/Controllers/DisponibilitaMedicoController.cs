@@ -18,6 +18,18 @@ namespace IntelliMedi.API.Controllers
         }
 
         //ASP.NET ha bisogno di decoratori diversi per richiamare il giusto metodo
+        //l'URL sarà: GET /api/DisponibilitaMedico/GetByTipologia?tipologiaId=
+        [HttpGet("GetByTipologia")]
+        public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetByTipologia(int tipologiaId)
+        {
+            //LINQ usa where per filtrare gli elementi di disponibilitaMedici con:
+            //MedicoId uguale a quello del medico ricevuto
+            //stesso giorno della settimana ricevuto
+            return await _context.DisponibilitaMedici
+            .Where(d => d.Medico.TipologiaVisite.Any(x => x.Id == tipologiaId))
+            .ToListAsync();
+        }
+
         //l'URL sarà: GET /api/DisponibilitaMedico/GetSingleDay?medicoId=3&data=2026-06-23
         [HttpGet("GetSingleDay")]
         public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetSingleDay(int medicoId, DateOnly data)
@@ -30,8 +42,7 @@ namespace IntelliMedi.API.Controllers
             .ToListAsync();
         }
 
-        //ASP.NET ha bisogno di decoratori diversi per richiamare il giusto metodo
-        //l'URL sarà: GET /api/DisponibilitaMedico/GetAllDays
+        //l'URL sarà: GET /api/DisponibilitaMedico/GetAllDays?medicoId=
         [HttpGet("GetAllDays")]
         public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetAllDays(int medicoId)
         {
