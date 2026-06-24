@@ -25,3 +25,14 @@ export interface DisponibilitaMedico {
   oraInizio: string;
   oraFine: string;
 }
+
+export interface Appuntamento {
+  id: number;
+  data: string;
+  tipologiaVisitaId:number;
+  pazienteId: number;
+  paziente?: User;
+  medicoId: number;
+  medico?: User;
+  descrizione?: string;
+}

@@ -7,8 +7,10 @@ import { API_URL, FORM_VUOTO } from "../constants";
 import { useErrore } from "../hooks/useErrore";
 import FormDatiUtente from "../components/FormDatiUtente";
 import Avvisi from "../components/Avvisi";
+import { useUtente } from "../context/UtenteContext";
 
 function Login() {
+  const { setUtente } = useUtente();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [form, setForm] = useState<DatiForm>(FORM_VUOTO);
@@ -43,6 +45,10 @@ function Login() {
     localStorage.setItem("token", dati.token);
     localStorage.setItem("id", String(dati.utente.id));
     localStorage.setItem("ruolo", dati.utente.ruolo);
+    localStorage.setItem("nome", dati.utente.nome);
+    localStorage.setItem("cognome", dati.utente.cognome);
+
+    setUtente({ id: String(dati.utente.id), ruolo: dati.utente.ruolo, nome: dati.utente.nome, cognome: dati.utente.cognome });
 
     navigate("/area-personale");
   }

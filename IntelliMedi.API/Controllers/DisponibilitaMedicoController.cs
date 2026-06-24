@@ -23,8 +23,7 @@ namespace IntelliMedi.API.Controllers
         public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetByTipologia(int tipologiaId)
         {
             //LINQ usa where per filtrare gli elementi di disponibilitaMedici con:
-            //MedicoId uguale a quello del medico ricevuto
-            //stesso giorno della settimana ricevuto
+            //tipologiaId uguale a quella ricevuta
             return await _context.DisponibilitaMedici
             .Where(d => d.Medico.TipologiaVisite.Any(x => x.Id == tipologiaId))
             .ToListAsync();
