@@ -23,23 +23,72 @@ namespace IntelliMedi.API.Controllers
         {
             return await _context.Appuntamenti.ToListAsync();
         }
-
-        [HttpGet("GetByMedico")]
-        public async Task<ActionResult<IEnumerable<Appuntamento>>> GetByMedico(int medicoId)
+        [HttpGet("GetByPaziente")]
+        public async Task<ActionResult<IEnumerable<AppuntamentoResponse>>> GetByPaziente(int pazienteId)
         {
             //LINQ usa where per filtrare gli elementi di appuntamenti con:
             //medicoId uguale a quella ricevuta
             return await _context.Appuntamenti
-            .Where(d => d.MedicoId == medicoId).ToListAsync();
+            .Where(d => d.PazienteId == pazienteId)
+            .Select(a => new AppuntamentoResponse
+            {
+                Id = a.Id,
+                Data = a.Data,
+                MedicoId = a.MedicoId,
+                PazienteId = a.PazienteId,
+                TipologiaVisitaId = a.TipologiaVisitaId,
+                MedicoNome = a.Medico.Nome,
+                MedicoCognome = a.Medico.Cognome,
+                TipologiaVisita = a.TipologiaVisita.Descrizione,
+                Descrizione = a.Descrizione,
+            })
+            .ToListAsync();
+        }
+
+        [HttpGet("GetByMedico")]
+        public async Task<ActionResult<IEnumerable<AppuntamentoResponse>>> GetByMedico(int medicoId)
+        {
+            //LINQ usa where per filtrare gli elementi di appuntamenti con:
+            //medicoId uguale a quella ricevuta
+            return await _context.Appuntamenti
+            .Where(d => d.MedicoId == medicoId)
+            .Select(a => new AppuntamentoResponse
+            {
+                Id = a.Id,
+                Data = a.Data,
+                MedicoId = a.MedicoId,
+                PazienteId = a.PazienteId,
+                TipologiaVisitaId = a.TipologiaVisitaId,
+                MedicoNome = a.Medico.Nome,
+                MedicoCognome = a.Medico.Cognome,
+                TipologiaVisita = a.TipologiaVisita.Descrizione,
+                Descrizione = a.Descrizione,
+
+            })
+            .ToListAsync();
         }
 
         [HttpGet("GetByTipologia")]
-        public async Task<ActionResult<IEnumerable<Appuntamento>>> GetByTipologia(int tipologiaId)
+        public async Task<ActionResult<IEnumerable<AppuntamentoResponse>>> GetByTipologia(int tipologiaId)
         {
             //LINQ usa where per filtrare gli elementi di appuntamenti con:
             //tipologiaId uguale a quella ricevuta
             return await _context.Appuntamenti
-            .Where(d => d.Medico.TipologiaVisite.Any(x => x.Id == tipologiaId))
+            .Where(d => d.Medico.TipologiaVisite
+            .Any(x => x.Id == tipologiaId))
+            .Select(a => new AppuntamentoResponse
+            {
+                Id = a.Id,
+                Data = a.Data,
+                MedicoId = a.MedicoId,
+                PazienteId = a.PazienteId,
+                TipologiaVisitaId = a.TipologiaVisitaId,
+                MedicoNome = a.Medico.Nome,
+                MedicoCognome = a.Medico.Cognome,
+                TipologiaVisita = a.TipologiaVisita.Descrizione,
+                Descrizione = a.Descrizione,
+
+            })
             .ToListAsync();
         }
 

@@ -58,15 +58,15 @@ function AreaPersonale() {
   const [user, setUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[] | null>(null);
   const [tipologiaVisite, setTipologiaVisite] = useState<TipologiaVisita[] | null>(null);
-  //usato dall'amministratore quando seleziona un utente
-  const [idUserSelezionato, setIdUserSelezionato] = useState("");
+  const [utenteSelezionato, setUtenteSelezionato] = useState<User | null>(null); //usato dall'amministratore quando seleziona un utente
   // Stati per la gestione degli errori
   const { errore, setErrore } = useErrore();
   // Stati per la gestione della visualizzazione sezioni
   const navigate = useNavigate();
   const [sezioneContent, setSezioneContent] = useState<"contentCards" | "anagrafica" | "prenotazioni" | "recensioni" | "listaUtenti" | "creaMedico">("contentCards");
   const [sezioneAnagrafica, setSezioneAnagrafica] = useState<"visualizza" | "modifica">("visualizza");
-  const [tipoLista, setTipoLista] = useState(""); //discrimina la lista pazienti dalla lista medici
+  const [sezionePrenotazioni, setSezionePrenotazioni] = useState<"visualizzaPrenotazioni" | "nuovaPrenotazione">("visualizzaPrenotazioni");
+  const [tipoLista, setTipoLista] = useState(""); //usato dall'amministratore quando seleziona un utente
   const [sidebarChiusa, setSidebarChiusa] = useState(false);
   // Stati per la gestione della lista users
   const USERS_PER_PAGINA = 10;
@@ -116,14 +116,15 @@ function AreaPersonale() {
     ],
     Paziente: [
       { etichetta: "Anagrafica", descrizione: "Visualizza e modifica i tuoi dati personali", immagine: "bi-person", link: mostraAnagrafica },
-      { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: () => mostraPrenotazioni(medicoIdCalendario ?? "") },
+      { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: () => mostraPrenotazioni(idUtente ?? "") },
     ],
     Medico: [
       { etichetta: "Anagrafica", descrizione: "Visualizza e modifica i tuoi dati personali", immagine: "bi-person", link: mostraAnagrafica },
-      { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: () => mostraPrenotazioni(medicoIdCalendario ?? "") },
+      { etichetta: "Prenotazioni", descrizione: "Gestisci le tue prenotazioni", immagine: "bi-calendar", link: () => mostraPrenotazioni(idUtente ?? "") },
     ],
   };
-  const medicoIdCalendario = ruolo === "Amministratore" ? idUserSelezionato : utente?.id;
+
+  const idUtente = ruolo === "Amministratore" ? utenteSelezionato?.id.toString() : utente?.id;
   const vociSidebar = vociPerRuolo[ruolo] ?? [];
   const colClass = vociSidebar.length > 3 ? "col-5 g-5" : "col-3";
   const nomeVisualizzato = ruolo === "Amministratore" ? "Amministratore" : `${user?.nome} ${user?.cognome}`;
@@ -196,7 +197,6 @@ function AreaPersonale() {
   }
 
   async function postDisponibilitaMedico(giorno: number, ora: number) {
-    const medicoId = medicoIdCalendario;
     // template literal = modo di scrivere stringhe usando i backtick ` (alt+096) invece degli apici ' o ".
     // dentro posso infilare espressioni con ${...}
     const oraInizio = `${ora.toString().padStart(2, "0")}:00:00`;
@@ -204,7 +204,7 @@ function AreaPersonale() {
     const risposta = await fetch(`${API_URL}/api/DisponibilitaMedico`, {
       method: "POST",
       headers: createHeaders(true),
-      body: JSON.stringify({ medicoId, giorno, oraInizio, oraFine }),
+      body: JSON.stringify({ medicoId: idUtente, giorno, oraInizio, oraFine }),
     });
 
     if (risposta.ok) return true;
@@ -326,9 +326,9 @@ function AreaPersonale() {
   }
 
   async function caricaListaTipologiaVisita() {
-    const dati = await getGenerico("TipologiaVisita");
-    setTipologiaVisite(dati);
-    return dati;
+    const datiTipologiaVisita = await getGenerico("TipologiaVisita");
+    setTipologiaVisite(datiTipologiaVisita);
+    return datiTipologiaVisita;
   }
 
   async function creaMedico(e: React.SubmitEvent) {
@@ -361,7 +361,10 @@ function AreaPersonale() {
         const nuovaData = new Date(a.data);
         return nuovaData.getHours() === ora && nuovaData.getFullYear() === giorno.getFullYear() && nuovaData.getMonth() === giorno.getMonth() && nuovaData.getDate() === giorno.getDate();
       }) ?? [];
+    console.log(appuntamentiCella);
+
     const appuntamentoPersonale = appuntamentiCella.find((x) => (x.tipologiaVisitaId === Number(idTipologia) && isPaziente ? x.pazienteId === Number(utente?.id) : x.medicoId === Number(utente?.id)));
+    console.log(appuntamentoPersonale);
     if (appuntamentoPersonale) {
       await deleteGenerico("Appuntamenti/" + appuntamentoPersonale.id.toString());
       if (isPaziente) caricaAppuntamentoPerTipologia(idTipologia ?? "");
@@ -388,15 +391,32 @@ function AreaPersonale() {
     const dati = await getGenerico(`Appuntamenti/GetByMedico?medicoId=${id}`);
     setAppuntamenti(dati);
   }
+  //chiamato dal medico quando fa la ricerca per medicoId
+  async function caricaAppuntamentoPerPaziente(id: string) {
+    const dati = await getGenerico(`Appuntamenti/GetByPaziente?pazienteId=${id}`);
+    setAppuntamenti(dati);
+  }
+
   async function mostraPrenotazioni(id: string) {
     if (isPaziente) {
+      caricaAppuntamentoPerPaziente(id);
       caricaListaTipologiaVisita();
     }
-    if (isMedico || isAdmin) {
+    if (isMedico) {
       caricaDisponibilitaPerMedico(id);
       caricaAppuntamentoPerMedico(id);
-      setTipoLista("DisponibilitaMedico");
+      //setTipoLista("DisponibilitaMedico");
     }
+    if (isAdmin) {
+      if (tipoLista === "Medici") {
+        caricaDisponibilitaPerMedico(id);
+        caricaAppuntamentoPerMedico(id);
+      }
+      if (tipoLista === "Pazienti") {
+        caricaAppuntamentoPerPaziente(id);
+      }
+    }
+    setSezionePrenotazioni("visualizzaPrenotazioni");
     setSezioneContent("prenotazioni");
   }
 
@@ -415,7 +435,7 @@ function AreaPersonale() {
   function statoCellaPaziente(giorno: Date, ora: number): "mio" | "prenotabile" | "pieno" {
     const { mediciDisponibili, appuntamentiCella } = datiCella(giorno, ora);
     //controlla se negli appuntamenti c'è l'id paziente (some restituisce boolean)
-    const mio = appuntamentiCella.some((x) => x.pazienteId === Number(utente?.id));
+    const mio = appuntamentiCella.some((x) => x.pazienteId === (isPaziente ? Number(utente?.id) : Number(utenteSelezionato?.id)));
     //estrae gli id dei medici occupati
     const mediciOccupati = appuntamentiCella?.map((x) => x.medicoId);
     //controlla se ne esiste almeno uno che NON (!) è incluso
@@ -426,12 +446,11 @@ function AreaPersonale() {
   }
 
   function statoCellaMedico(giorno: Date, ora: number): "prenotato" | "prenotabile" | "na" {
-    console.log("ok");
     const { mediciDisponibili, appuntamentiCella } = datiCella(giorno, ora);
-    const medicoDisponibile = mediciDisponibili.includes(Number(utente?.id));
+    const medicoDisponibile = mediciDisponibili.includes(isMedico ? Number(utente?.id) : Number(utenteSelezionato?.id));
     if (medicoDisponibile) {
       //controlla se negli appuntamenti c'è l'id paziente (some restituisce boolean)
-      const prenotato = appuntamentiCella.some((x) => x.medicoId === Number(utente?.id));
+      const prenotato = appuntamentiCella.some((x) => x.medicoId === (isMedico ? Number(utente?.id) : Number(utenteSelezionato?.id)));
       if (prenotato) return "prenotato";
       else return "prenotabile";
     } else return "na";
@@ -440,7 +459,6 @@ function AreaPersonale() {
   async function gestisciCella(giorno: Date, ora: number) {
     let ok;
     const giornoDisponibile = oreDisponibiliDelGiorno(giorno.getDay()).includes(ora);
-    console.log("giornoDisponibile: " + giornoDisponibile);
     if (giornoDisponibile) {
       const cella = disponibilitaMedico?.find((d) => d.giorno === giorno.getDay() && Number.parseInt(d.oraInizio) === ora);
       if (cella !== undefined) {
@@ -450,7 +468,7 @@ function AreaPersonale() {
       ok = await postDisponibilitaMedico(giorno.getDay(), ora);
     }
     //caricaDisponibilitaPerMedico solo se andato a buon fine
-    if (ok) await caricaDisponibilitaPerMedico(medicoIdCalendario ?? "");
+    if (ok) await caricaDisponibilitaPerMedico(idUtente ?? "");
   }
 
   async function aggiungiPiuDisponibilita(giorno: number, oraInizio: number, oraFine: number) {
@@ -466,9 +484,8 @@ function AreaPersonale() {
         if (esito) ok = true; // una volta true, resta true
       }
     }
-    if (ok) await caricaDisponibilitaPerMedico(medicoIdCalendario ?? "");
+    if (ok) await caricaDisponibilitaPerMedico(idUtente ?? "");
   }
-
 
   function eseguiLogout() {
     localStorage.clear(); // o le singole removeItem
@@ -509,9 +526,9 @@ function AreaPersonale() {
                 indicePagina={indicePagina}
                 onCambiaPagina={setIndicePagina}
                 totalePagineUtenti={totalePagineUtenti}
-                onVisualizzaPrenotazione={(id) => {
-                  mostraPrenotazioni(id);
-                  setIdUserSelezionato(id);
+                onVisualizzaPrenotazione={(utenteSelezionato) => {
+                  mostraPrenotazioni(utenteSelezionato.id.toString());
+                  setUtenteSelezionato(utenteSelezionato);
                 }}
               ></ListaUtenti>
             )}
@@ -584,10 +601,15 @@ function AreaPersonale() {
                 tipologiaVisite={tipologiaVisite}
                 onPrenota={postAppuntamento}
                 onDisdici={cancellaAppuntamento}
+                onDisdici2={(id) => deleteGenerico("Appuntamenti/" + id?.toString())}
                 caricaAppuntamento={caricaAppuntamentoPerTipologia}
                 statoCellaPaziente={(giorno, ora) => statoCellaPaziente(giorno, ora)}
                 statoCellaMedico={(giorno, ora) => statoCellaMedico(giorno, ora)}
-                userSelezionato={user}
+                utenteSelezionato={utenteSelezionato}
+                tipoLista={tipoLista}
+                appuntamenti={appuntamenti}
+                setSezionePrenotazioni={setSezionePrenotazioni}
+                sezionePrenotazioni={sezionePrenotazioni}
               ></Prenotazioni>
             )}
           </div>
@@ -709,7 +731,7 @@ function ListaUtenti({
   indicePagina: number;
   onCambiaPagina: (numeroPagina: number) => void;
   totalePagineUtenti: number;
-  onVisualizzaPrenotazione: (idUtente: string) => void;
+  onVisualizzaPrenotazione: (utenteSelezionato: User) => void;
 }>) {
   return (
     <div className="row g-0">
@@ -788,7 +810,7 @@ function ListaUtenti({
                                 </li>
                               )}
                               <li className="list-inline-item">
-                                <button className="btn px-2 text-success" title="Prenotazioni attive" onClick={() => onVisualizzaPrenotazione(user.id.toString())}>
+                                <button className="btn px-2 text-success" title="Prenotazioni attive" onClick={() => onVisualizzaPrenotazione(user)}>
                                   <i className="bi-calendar-check"></i>
                                 </button>
                               </li>
@@ -989,10 +1011,15 @@ function Prenotazioni({
   tipologiaVisite,
   onPrenota,
   onDisdici,
+  onDisdici2,
   caricaAppuntamento,
+  appuntamenti,
   statoCellaPaziente,
   statoCellaMedico,
-  userSelezionato,
+  utenteSelezionato,
+  tipoLista,
+  sezionePrenotazioni,
+  setSezionePrenotazioni,
 }: Readonly<{
   onAggiungiFascia: (giorno: number, oraInizio: number, oraFine: number) => void;
   giorniSettimana: Date[];
@@ -1003,10 +1030,15 @@ function Prenotazioni({
   tipologiaVisite: TipologiaVisita[] | null;
   onPrenota: (giorno: Date, ora: number, tipologiaSelezionata: number | null, descrizione: string | null) => void;
   onDisdici: (giorno: Date, ora: number, tipologiaSelezionata: string | null) => void;
+  onDisdici2: (tipologiaSelezionata: string | null) => void;
   caricaAppuntamento: (id: string) => void;
+  appuntamenti: Appuntamento[] | null;
   statoCellaPaziente: (giorno: Date, ora: number) => string;
   statoCellaMedico: (giorno: Date, ora: number) => string;
-  userSelezionato: User | null;
+  utenteSelezionato: User | null;
+  tipoLista: string;
+  sezionePrenotazioni: string;
+  setSezionePrenotazioni: React.Dispatch<React.SetStateAction<"nuovaPrenotazione" | "visualizzaPrenotazioni">>;
 }>) {
   const [mostraFormFasciaDisponibilita, setMostraFormFasciaDisponibilita] = useState(false);
   const [giornoGestioneDisponibilita, setGiornoGestioneDisponibilita] = useState(1);
@@ -1015,16 +1047,49 @@ function Prenotazioni({
   const [tipologiaSelezionata, setTipologiaSelezionata] = useState<number | null>(null);
   const { utente, isPaziente, isMedico, isAdmin, setUtente } = useUtente();
 
+  const titoloCalendario =
+    tipoLista === "Medici" ? `Calendario del Dr. ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}` : `Prenotazioni di ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}`;
+
+  const COLORI_PAZIENTE: Record<string, string> = { mio: "bg-success", prenotabile: "bg-info", pieno: "bg-light" };
+  const COLORI_MEDICO: Record<string, string> = { prenotato: "bg-danger", prenotabile: "bg-success", na: "bg-light" };
+  const COLORI_ADMIN_PAZIENTE: Record<string, string> = { mio: "bg-danger", pieno: "bg-light" };
+
+  function formattaData(dataIso: string) {
+    const d = new Date(dataIso);
+    return {
+      giorno: d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }),
+      ora: d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+    };
+  }
+
+  function gestioneCelle(giorno: Date, ora: number) {
+    let controlloCella: string;
+    let mappaColori: Record<string, string>;
+    if (isPaziente) {
+      controlloCella = statoCellaPaziente(giorno, ora);
+      mappaColori = COLORI_PAZIENTE;
+    } else if (isAdmin && tipoLista === "Pazienti") {
+      controlloCella = statoCellaPaziente(giorno, ora);
+      mappaColori = COLORI_ADMIN_PAZIENTE;
+    } else {
+      // isMedico, oppure isAdmin sui Medici
+      controlloCella = statoCellaMedico(giorno, ora);
+      mappaColori = COLORI_MEDICO;
+    }
+
+    return { controlloCella, coloreCella: mappaColori[controlloCella] };
+  }
+
   return (
     <div className={styles.prenotazioniContainer}>
       <div className="row g-0">
-        <div className={`p-3  ${stylesShared.cardBorder}`}>
-          {(!isPaziente || tipologiaSelezionata !== null) && (
+        {sezionePrenotazioni === "nuovaPrenotazione" && (
+          <div className={`p-3  ${stylesShared.cardBorder}`}>
             <div className={`card ${styles.projectListTableColor}`}>
               <div className={`card-header text-white ${styles.titleMedisport}`}>
                 <div className="row">
                   <div className="col-6">
-                    {isAdmin && <h5 className="m-2">{`Calendario prenotazioni di ${userSelezionato?.nome}`}</h5>}
+                    {isAdmin && <h5 className="m-2">{titoloCalendario}</h5>}
                     {!isAdmin && <h5 className="m-2">Calendario prenotazioni</h5>}
                   </div>
                   <div className="col-6 d-flex justify-content-end">
@@ -1064,54 +1129,52 @@ function Prenotazioni({
                     )}
                     {mostraFormFasciaDisponibilita && (
                       <div className={`${styles.pannelloDisponibilita} me-4`}>
-                        <div className={`d-flex gap-3 align-items-end p-3 ${stylesShared.cardBorder}`}>
-                          <div>
-                            <label htmlFor="selGiorno" className="form-label">
-                              Giorno
-                            </label>
-                            <select id="selGiorno" className="form-select" value={giornoGestioneDisponibilita} onChange={(e) => setGiornoGestioneDisponibilita(Number(e.target.value))}>
-                              {GIORNI_SETTIMANA.map((giorno) => (
-                                <option key={giorno.indice} value={giorno.indice}>
-                                  {giorno.nome}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label htmlFor="selOraInizio" className="form-label">
-                              Dalle
-                            </label>
-                            <select id="selOraInizio" className="form-select" value={oraInizioGestioneDisponibilita} onChange={(e) => setOraInizioGestioneDisponibilita(Number(e.target.value))}>
-                              {grigliaOre.map((ora) => (
-                                <option key={ora} value={ora}>
-                                  {ora.toString().padStart(2, "0")}:00
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label htmlFor="selOraFine" className="form-label">
-                              Alle
-                            </label>
-                            <select id="selOraFine" className="form-select" value={oraFineGestioneDisponibilita} onChange={(e) => setOraFineGestioneDisponibilita(Number(e.target.value))}>
-                              {grigliaOre.map((ora) => (
-                                <option key={ora} value={ora}>
-                                  {ora.toString().padStart(2, "0")}:00
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-success"
-                            onClick={() => {
-                              onAggiungiFascia(giornoGestioneDisponibilita, oraInizioGestioneDisponibilita, oraFineGestioneDisponibilita);
-                              setMostraFormFasciaDisponibilita(false);
-                            }}
-                          >
-                            <i className="bi-check-lg"></i> Conferma
-                          </button>
+                        <div>
+                          <label htmlFor="selGiorno" className="form-label">
+                            Giorno
+                          </label>
+                          <select id="selGiorno" className="form-select" value={giornoGestioneDisponibilita} onChange={(e) => setGiornoGestioneDisponibilita(Number(e.target.value))}>
+                            {GIORNI_SETTIMANA.map((giorno) => (
+                              <option key={giorno.indice} value={giorno.indice}>
+                                {giorno.nome}
+                              </option>
+                            ))}
+                          </select>
                         </div>
+                        <div>
+                          <label htmlFor="selOraInizio" className="form-label">
+                            Dalle
+                          </label>
+                          <select id="selOraInizio" className="form-select" value={oraInizioGestioneDisponibilita} onChange={(e) => setOraInizioGestioneDisponibilita(Number(e.target.value))}>
+                            {grigliaOre.map((ora) => (
+                              <option key={ora} value={ora}>
+                                {ora.toString().padStart(2, "0")}:00
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="selOraFine" className="form-label">
+                            Alle
+                          </label>
+                          <select id="selOraFine" className="form-select" value={oraFineGestioneDisponibilita} onChange={(e) => setOraFineGestioneDisponibilita(Number(e.target.value))}>
+                            {grigliaOre.map((ora) => (
+                              <option key={ora} value={ora}>
+                                {ora.toString().padStart(2, "0")}:00
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-success"
+                          onClick={() => {
+                            onAggiungiFascia(giornoGestioneDisponibilita, oraInizioGestioneDisponibilita, oraFineGestioneDisponibilita);
+                            setMostraFormFasciaDisponibilita(false);
+                          }}
+                        >
+                          <i className="bi-check-lg"></i> Conferma
+                        </button>
                       </div>
                     )}
                   </div>
@@ -1172,19 +1235,7 @@ function Prenotazioni({
                             <th scope="row">{ora.toString().padStart(2, "0")}:00</th>
                             {giorniSettimana.map((giorno) => {
                               const giornoDisponibile = isGiornoDisponibile(giorno, ora);
-                              let controlloCella;
-                              let coloreCella;
-                              if (isPaziente) {
-                                controlloCella = statoCellaPaziente(giorno, ora);
-                                if (controlloCella === "mio") coloreCella = "bg-success";
-                                if (controlloCella === "prenotabile") coloreCella = "bg-info";
-                                if (controlloCella === "pieno") coloreCella = "bg-light";
-                              } else {
-                                controlloCella = statoCellaMedico(giorno, ora);
-                                if (controlloCella === "prenotato") coloreCella = "bg-danger";
-                                if (controlloCella === "prenotabile") coloreCella = "bg-success";
-                                if (controlloCella === "na") coloreCella = "bg-light";
-                              }
+                              const { coloreCella, controlloCella } = gestioneCelle(giorno, ora);
                               return (
                                 <td
                                   title={titoloCella(isPaziente, giornoDisponibile)}
@@ -1209,35 +1260,144 @@ function Prenotazioni({
                 </div>
               </div>
             </div>
-          )}
-          {isPaziente && tipologiaSelezionata === null && (
-            <div className="card">
-              <div className={`card-header text-white ${styles.titleMedisport}`}>
-                <h5 className="m-2">Prenota la tua visita</h5>
-              </div>
-              <div className="p-3">
-                <select
-                  id="selTipologia"
-                  className="form-select"
-                  value={tipologiaSelezionata ?? ""}
-                  onChange={(e) => {
-                    const id = Number(e.target.value);
-                    setTipologiaSelezionata(id);
-                    caricaDisponibilita(id.toString());
-                    caricaAppuntamento(id.toString());
-                  }}
-                >
-                  <option value="">—</option>
-                  {tipologiaVisite?.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.descrizione}
-                    </option>
-                  ))}
-                </select>
+          </div>
+        )}
+        {sezionePrenotazioni === "visualizzaPrenotazioni" && (
+          <div className="container">
+            <div className="row">
+              <div className={`p-3 ${stylesShared.cardBorder}`}>
+                <div className="card">
+                  <div className={`card ${styles.projectListTableColor}`}>
+                    <div className={`card-header text-white ${styles.titleMedisport}`}>
+                      <div className="row">
+                        <div className="col-6">
+                          <h5 className="m-2">Prenotazioni confermate</h5>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="row">
+                      <div className="col-lg-12">
+                        <div className="">
+                          <div className="table-responsive">
+                            <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
+                              <thead>
+                                <tr>
+                                  <th scope="col" className={`${styles.w20} ps-4`}>
+                                    Tipologia Visita
+                                  </th>
+                                  <th className={`${styles.w20}`} scope="col">
+                                    Medico
+                                  </th>
+                                  <th className={`${styles.w20}`} scope="col">
+                                    Giorno
+                                  </th>
+                                  <th className={`${styles.w20}`} scope="col">
+                                    Ora
+                                  </th>
+                                  <th className={`${styles.w10}`} scope="col">
+                                    Gestione
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {appuntamenti?.map((appuntamento) => {
+                                  const { giorno, ora } = formattaData(appuntamento.data);
+                                  return (
+                                    <tr key={appuntamento.id}>
+                                      <td className="ps-4">{appuntamento.tipologiaVisita}</td>
+                                      <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>
+                                      <td>{giorno}</td>
+                                      <td>{ora}</td>
+                                      <td>
+                                        <ul className="list-inline m-0">
+                                          <li className="list-inline-item position-relative">
+                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => onDisdici2(appuntamento.id.toString())}>
+                                              <i className="bi bi-trash font-size-18"></i>
+                                            </button>
+                                          </li>
+                                        </ul>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* <div className="p-3 row g-0 align-items-center pb-4">
+                  <div className="col-sm-6">
+                    <div>
+                      <p className="mb-sm-0">
+                        Mostrando {totaleUsers === 0 ? 0 : inizioPaginaUtenti + 1} a {Math.min(inizioPaginaUtenti + USERS_PER_PAGINA, totaleUsers)} di {totaleUsers} totali
+                      </p>
+                    </div>
+                  </div>
+                  <div className="col-sm-6 me-0">
+                    <div className="float-sm-end">
+                      <ul className="pagination mb-sm-0">
+                        <li className={`page-item ${indicePagina <= 1 ? "disabled" : ""}`}>
+                          <button className="btn page-link" onClick={() => onCambiaPagina(indicePagina - 1)} disabled={indicePagina <= 1}>
+                            <i className="bi bi-chevron-left"></i>
+                          </button>
+                        </li>
+                        <li className="page-item">
+                          <div className="btn-toolbar" role="toolbar">
+                            <div className="btn-group">
+                              {Array.from({ length: totalePagineUtenti }, (_, indice) => (
+                                <button key={indice} className={`btn btn-primary ${indicePagina === indice + 1 ? "active" : ""}`} onClick={() => onCambiaPagina(indice + 1)}>
+                                  {indice + 1}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </li>
+                        <li className={`page-item ${indicePagina >= totalePagineUtenti ? "disabled" : ""}`}>
+                          <button className="btn page-link" onClick={() => onCambiaPagina(indicePagina + 1)} disabled={indicePagina >= totalePagineUtenti}>
+                            <i className="bi bi-chevron-right"></i>
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div> */}
+                  </div>
+                </div>
               </div>
             </div>
-          )}
-        </div>
+            <div className="row">
+              <div className={`p-3 mt-5 ${stylesShared.cardBorder}`}>
+                <div className="card">
+                  <div className={`card-header text-white ${styles.titleMedisport}`}>
+                    <h5 className="m-2">Prenota la tua visita</h5>
+                  </div>
+                  <div className="p-3">
+                    <select
+                      id="selTipologia"
+                      className="form-select"
+                      value={tipologiaSelezionata ?? ""}
+                      onChange={(e) => {
+                        const id = Number(e.target.value);
+                        setTipologiaSelezionata(id);
+                        caricaDisponibilita(id.toString());
+                        caricaAppuntamento(id.toString());
+                        setSezionePrenotazioni("nuovaPrenotazione");
+                      }}
+                    >
+                      <option value="">—</option>
+                      {tipologiaVisite?.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.descrizione}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

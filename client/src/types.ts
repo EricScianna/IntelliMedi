@@ -31,8 +31,9 @@ export interface Appuntamento {
   data: string;
   tipologiaVisitaId:number;
   pazienteId: number;
-  paziente?: User;
   medicoId: number;
-  medico?: User;
+  medicoNome: string;
+  medicoCognome: string;
+  tipologiaVisita: string;
   descrizione?: string;
 }
