@@ -20,7 +20,8 @@ export interface User {
 export interface DisponibilitaMedico {
   id: number;
   medicoId: number;
-  medico?: User;
+  medicoNome: string;
+  medicoCognome: string;
   giorno: number;
   oraInizio: string;
   oraFine: string;

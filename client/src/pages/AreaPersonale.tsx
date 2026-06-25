@@ -212,7 +212,7 @@ function AreaPersonale() {
     return false;
   }
 
-  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionata: number | null, descrizione: string | null) {
+  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId: number | null, descrizione: string | null) {
     const nuovaData = new Date(giorno);
     nuovaData.setHours(oraAppuntamento, 0, 0, 0);
     const dataFormattata =
@@ -228,10 +228,10 @@ function AreaPersonale() {
     const risposta = await fetch(`${API_URL}/api/Appuntamenti`, {
       method: "POST",
       headers: createHeaders(true),
-      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: tipologiaSelezionata, PazienteId: Number(utente?.id), medicoId, descrizione }),
+      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: tipologiaSelezionataId, PazienteId: Number(utente?.id), medicoId, descrizione }),
     });
 
-    if (risposta.ok) return caricaAppuntamentoPerTipologia(tipologiaSelezionata ? tipologiaSelezionata.toString() : "");
+    if (risposta.ok) return caricaAppuntamentoPerTipologia(tipologiaSelezionataId ? tipologiaSelezionataId.toString() : "");
     if (!risposta.ok) {
       if (risposta.status === 409) {
         setErrore("Data già occupata");
@@ -370,6 +370,11 @@ function AreaPersonale() {
       if (isPaziente) caricaAppuntamentoPerTipologia(idTipologia ?? "");
       else caricaAppuntamentoPerMedico(utente?.id ?? "");
     }
+  }
+
+  async function cancellaAppuntamentoById(id: string) {
+    await deleteGenerico("Appuntamenti/" + id.toString());
+    await caricaAppuntamentoPerPaziente(utente?.id ?? "");
   }
 
   async function caricaDisponibilitaPerMedico(id: string) {
@@ -597,12 +602,12 @@ function AreaPersonale() {
                 grigliaOre={grigliaOre}
                 isGiornoDisponibile={(giorno, ora) => oreDisponibiliDelGiorno(giorno.getDay()).includes(ora)}
                 onClickCasella={(giorno, ora) => gestisciCella(giorno, ora)}
-                caricaDisponibilita={caricaDisponibilitaPerTipologia}
+                onCaricaDisponibilitaPerTipologia={caricaDisponibilitaPerTipologia}
                 tipologiaVisite={tipologiaVisite}
                 onPrenota={postAppuntamento}
                 onDisdici={cancellaAppuntamento}
-                onDisdici2={(id) => deleteGenerico("Appuntamenti/" + id?.toString())}
-                caricaAppuntamento={caricaAppuntamentoPerTipologia}
+                onDisdiciById={cancellaAppuntamentoById}
+                onCaricaAppuntamentoPerTipologia={caricaAppuntamentoPerTipologia}
                 statoCellaPaziente={(giorno, ora) => statoCellaPaziente(giorno, ora)}
                 statoCellaMedico={(giorno, ora) => statoCellaMedico(giorno, ora)}
                 utenteSelezionato={utenteSelezionato}
@@ -610,6 +615,7 @@ function AreaPersonale() {
                 appuntamenti={appuntamenti}
                 setSezionePrenotazioni={setSezionePrenotazioni}
                 sezionePrenotazioni={sezionePrenotazioni}
+                onDisponibilitaMedico={disponibilitaMedico}
               ></Prenotazioni>
             )}
           </div>
@@ -1007,12 +1013,12 @@ function Prenotazioni({
   grigliaOre,
   isGiornoDisponibile,
   onClickCasella,
-  caricaDisponibilita,
+  onCaricaDisponibilitaPerTipologia,
   tipologiaVisite,
   onPrenota,
   onDisdici,
-  onDisdici2,
-  caricaAppuntamento,
+  onDisdiciById,
+  onCaricaAppuntamentoPerTipologia,
   appuntamenti,
   statoCellaPaziente,
   statoCellaMedico,
@@ -1020,18 +1026,19 @@ function Prenotazioni({
   tipoLista,
   sezionePrenotazioni,
   setSezionePrenotazioni,
+  onDisponibilitaMedico,
 }: Readonly<{
   onAggiungiFascia: (giorno: number, oraInizio: number, oraFine: number) => void;
   giorniSettimana: Date[];
   grigliaOre: number[];
   isGiornoDisponibile: (giorno: Date, ora: number) => boolean;
   onClickCasella: (giorno: Date, ora: number) => void;
-  caricaDisponibilita: (id: string) => void;
+  onCaricaDisponibilitaPerTipologia: (id: string) => void;
   tipologiaVisite: TipologiaVisita[] | null;
-  onPrenota: (giorno: Date, ora: number, tipologiaSelezionata: number | null, descrizione: string | null) => void;
-  onDisdici: (giorno: Date, ora: number, tipologiaSelezionata: string | null) => void;
-  onDisdici2: (tipologiaSelezionata: string | null) => void;
-  caricaAppuntamento: (id: string) => void;
+  onPrenota: (giorno: Date, ora: number, tipologiaSelezionataId: number | null, descrizione: string | null) => void;
+  onDisdici: (giorno: Date, ora: number, tipologiaSelezionataId: string | null) => void;
+  onDisdiciById: (tipologiaSelezionataId: string) => void;
+  onCaricaAppuntamentoPerTipologia: (id: string) => void;
   appuntamenti: Appuntamento[] | null;
   statoCellaPaziente: (giorno: Date, ora: number) => string;
   statoCellaMedico: (giorno: Date, ora: number) => string;
@@ -1039,12 +1046,13 @@ function Prenotazioni({
   tipoLista: string;
   sezionePrenotazioni: string;
   setSezionePrenotazioni: React.Dispatch<React.SetStateAction<"nuovaPrenotazione" | "visualizzaPrenotazioni">>;
+  onDisponibilitaMedico: DisponibilitaMedico[] | null;
 }>) {
   const [mostraFormFasciaDisponibilita, setMostraFormFasciaDisponibilita] = useState(false);
   const [giornoGestioneDisponibilita, setGiornoGestioneDisponibilita] = useState(1);
   const [oraInizioGestioneDisponibilita, setOraInizioGestioneDisponibilita] = useState(8);
   const [oraFineGestioneDisponibilita, setOraFineGestioneDisponibilita] = useState(19);
-  const [tipologiaSelezionata, setTipologiaSelezionata] = useState<number | null>(null);
+  const [tipologiaSelezionataId, setTipologiaSelezionataId] = useState<string | null>(null);
   const { utente, isPaziente, isMedico, isAdmin, setUtente } = useUtente();
 
   const titoloCalendario =
@@ -1080,6 +1088,8 @@ function Prenotazioni({
     return { controlloCella, coloreCella: mappaColori[controlloCella] };
   }
 
+  const mediciUnici = [...new Map(onDisponibilitaMedico?.map((d) => [d.medicoId, d])).values()];
+
   return (
     <div className={styles.prenotazioniContainer}>
       <div className="row g-0">
@@ -1108,12 +1118,12 @@ function Prenotazioni({
                             <select
                               id="selTipologia"
                               className="form-select rounded-pill d-inline"
-                              value={tipologiaSelezionata ?? ""}
+                              value={tipologiaSelezionataId ?? ""}
                               onChange={(e) => {
                                 const id = Number(e.target.value);
-                                setTipologiaSelezionata(id);
-                                caricaDisponibilita(id.toString());
-                                caricaAppuntamento(id.toString());
+                                setTipologiaSelezionataId(id);
+                                onCaricaDisponibilitaPerTipologia(id.toString());
+                                onCaricaAppuntamentoPerTipologia(id.toString());
                               }}
                             >
                               <option value="">—</option>
@@ -1244,10 +1254,10 @@ function Prenotazioni({
                                   className={`${styles.cellStyle} ${coloreCella} ${!isPaziente || giornoDisponibile ? styles.cellStylePointer : ""}`}
                                   onClick={() => {
                                     if (isPaziente) {
-                                      if (giornoDisponibile && controlloCella === "prenotabile") onPrenota(giorno, ora, tipologiaSelezionata, null);
-                                      else if (giornoDisponibile && controlloCella === "mio") onDisdici(giorno, ora, tipologiaSelezionata?.toString() ?? "");
+                                      if (giornoDisponibile && controlloCella === "prenotabile") onPrenota(giorno, ora, tipologiaSelezionataId, null);
+                                      else if (giornoDisponibile && controlloCella === "mio") onDisdici(giorno, ora, tipologiaSelezionataId?.toString() ?? "");
                                     } else if (controlloCella === "prenotabile" || controlloCella === "na") onClickCasella(giorno, ora);
-                                    else if (controlloCella === "prenotato") onDisdici(giorno, ora, tipologiaSelezionata?.toString() ?? "");
+                                    else if (controlloCella === "prenotato") onDisdici(giorno, ora, tipologiaSelezionataId?.toString() ?? "");
                                   }}
                                 ></td>
                               );
@@ -1265,68 +1275,71 @@ function Prenotazioni({
         {sezionePrenotazioni === "visualizzaPrenotazioni" && (
           <div className="container">
             <div className="row">
-              <div className={`p-3 ${stylesShared.cardBorder}`}>
-                <div className="card">
-                  <div className={`card ${styles.projectListTableColor}`}>
-                    <div className={`card-header text-white ${styles.titleMedisport}`}>
-                      <div className="row">
-                        <div className="col-6">
-                          <h5 className="m-2">Prenotazioni confermate</h5>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="row">
-                      <div className="col-lg-12">
-                        <div className="">
-                          <div className="table-responsive">
-                            <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
-                              <thead>
-                                <tr>
-                                  <th scope="col" className={`${styles.w20} ps-4`}>
-                                    Tipologia Visita
-                                  </th>
-                                  <th className={`${styles.w20}`} scope="col">
-                                    Medico
-                                  </th>
-                                  <th className={`${styles.w20}`} scope="col">
-                                    Giorno
-                                  </th>
-                                  <th className={`${styles.w20}`} scope="col">
-                                    Ora
-                                  </th>
-                                  <th className={`${styles.w10}`} scope="col">
-                                    Gestione
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {appuntamenti?.map((appuntamento) => {
-                                  const { giorno, ora } = formattaData(appuntamento.data);
-                                  return (
-                                    <tr key={appuntamento.id}>
-                                      <td className="ps-4">{appuntamento.tipologiaVisita}</td>
-                                      <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>
-                                      <td>{giorno}</td>
-                                      <td>{ora}</td>
-                                      <td>
-                                        <ul className="list-inline m-0">
-                                          <li className="list-inline-item position-relative">
-                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => onDisdici2(appuntamento.id.toString())}>
-                                              <i className="bi bi-trash font-size-18"></i>
-                                            </button>
-                                          </li>
-                                        </ul>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
+              <div className="col-8">
+                <div className={`p-3 ${stylesShared.cardBorder}`}>
+                  <div className="card">
+                    <div className={`card ${styles.projectListTableColor}`}>
+                      <div className={`card-header text-white ${styles.titleMedisport}`}>
+                        <div className="row">
+                          <div className="col-6">
+                            <h5 className="m-2">Prenotazioni confermate</h5>
                           </div>
                         </div>
                       </div>
-                    </div>
-                    {/* <div className="p-3 row g-0 align-items-center pb-4">
+                      <div className="row">
+                        <div className="col-lg-12">
+                          <div className="">
+                            <div className="table-responsive">
+                              <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
+                                <thead>
+                                  <tr>
+                                    <th scope="col" className={`${styles.w20} ps-4`}>
+                                      Tipologia Visita
+                                    </th>
+                                    <th className={`${styles.w20}`} scope="col">
+                                      Medico
+                                    </th>
+                                    <th className={`${styles.w20}`} scope="col">
+                                      Giorno
+                                    </th>
+                                    <th className={`${styles.w20}`} scope="col">
+                                      Ora
+                                    </th>
+                                    <th className={`${styles.w10}`} scope="col">
+                                      Gestione
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {appuntamenti
+                                    ?.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
+                                    .map((appuntamento) => {
+                                      const { giorno, ora } = formattaData(appuntamento.data);
+                                      return (
+                                        <tr key={appuntamento.id}>
+                                          <td className="ps-4">{appuntamento.tipologiaVisita}</td>
+                                          <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>
+                                          <td>{giorno}</td>
+                                          <td>{ora}</td>
+                                          <td>
+                                            <ul className="list-inline m-0">
+                                              <li className="list-inline-item position-relative">
+                                                <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => onDisdiciById(appuntamento.id.toString())}>
+                                                  <i className="bi bi-trash font-size-18"></i>
+                                                </button>
+                                              </li>
+                                            </ul>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      {/* <div className="p-3 row g-0 align-items-center pb-4">
                   <div className="col-sm-6">
                     <div>
                       <p className="mb-sm-0">
@@ -1362,36 +1375,81 @@ function Prenotazioni({
                     </div>
                   </div>
                 </div> */}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="row">
-              <div className={`p-3 mt-5 ${stylesShared.cardBorder}`}>
-                <div className="card">
-                  <div className={`card-header text-white ${styles.titleMedisport}`}>
-                    <h5 className="m-2">Prenota la tua visita</h5>
-                  </div>
-                  <div className="p-3">
-                    <select
-                      id="selTipologia"
-                      className="form-select"
-                      value={tipologiaSelezionata ?? ""}
-                      onChange={(e) => {
-                        const id = Number(e.target.value);
-                        setTipologiaSelezionata(id);
-                        caricaDisponibilita(id.toString());
-                        caricaAppuntamento(id.toString());
-                        setSezionePrenotazioni("nuovaPrenotazione");
-                      }}
-                    >
-                      <option value="">—</option>
-                      {tipologiaVisite?.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.descrizione}
-                        </option>
-                      ))}
-                    </select>
+              <div className="col-4">
+                <div className={`p-3 ${stylesShared.cardBorder}`}>
+                  <div className="card">
+                    <div className={`card-header text-white ${styles.titleMedisport}`}>
+                      <h5 className="m-2">Prenota la tua visita</h5>
+                    </div>
+                    <div className="container">
+                      <div className="row p-3">
+                        <label htmlFor="selGiorno" className="form-label text-muted">
+                          Seleziona la tipologia di servizio
+                        </label>
+                        <select
+                          id="selTipologia"
+                          className="form-select"
+                          value={tipologiaSelezionataId ?? ""}
+                          onChange={(e) => {
+                            setTipologiaSelezionataId(e.target.value);
+                            onCaricaDisponibilitaPerTipologia(e.target.value);
+                            console.log(onDisponibilitaMedico);
+                          }}
+                        >
+                          <option value="" disabled hidden>
+                            Servizi
+                          </option>
+                          {tipologiaVisite?.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.descrizione}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="row p-3">
+                        <label htmlFor="selGiorno" className="form-label text-muted">
+                          Preferisci un professionista?
+                        </label>
+                        <select
+                          disabled={!onDisponibilitaMedico}
+                          id="selOperatore"
+                          className="form-select"
+                          value={tipologiaSelezionataId ?? ""}
+                          onChange={(e) => {
+                            const id = Number(e.target.value);
+                            // setTipologiaSelezionataId(id);
+                            // onCaricaDisponibilitaPerTipologia(id.toString());
+                            // onCaricaAppuntamentoPerTipologia(id.toString());
+                            // setSezionePrenotazioni("nuovaPrenotazione");
+                          }}
+                        >
+                          <option value="" disabled hidden>
+                            Operatore
+                          </option>
+                          {mediciUnici.map((m) => (
+                            <option key={m.medicoId} value={m.medicoId}>
+                              {m.medicoNome} {m.medicoCognome}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="row p-3">
+                        <button
+                          className="btn btn-outline-success rounded-pill px-4 fw-bold"
+                          onClick={() => {
+                            onCaricaDisponibilitaPerTipologia(tipologiaSelezionataId ?? "");
+                            onCaricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
+                            setSezionePrenotazioni("nuovaPrenotazione");
+                          }}
+                        >
+                          PRENOTA
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

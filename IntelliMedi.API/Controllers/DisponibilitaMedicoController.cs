@@ -20,12 +20,23 @@ namespace IntelliMedi.API.Controllers
         //ASP.NET ha bisogno di decoratori diversi per richiamare il giusto metodo
         //l'URL sarà: GET /api/DisponibilitaMedico/GetByTipologia?tipologiaId=
         [HttpGet("GetByTipologia")]
-        public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetByTipologia(int tipologiaId)
+        public async Task<ActionResult<IEnumerable<DisponibilitaMedicoResponse>>> GetByTipologia(int tipologiaId)
         {
             //LINQ usa where per filtrare gli elementi di disponibilitaMedici con:
             //tipologiaId uguale a quella ricevuta
             return await _context.DisponibilitaMedici
-            .Where(d => d.Medico.TipologiaVisite.Any(x => x.Id == tipologiaId))
+            .Where(d => d.Medico.TipologiaVisite
+            .Any(x => x.Id == tipologiaId))
+            .Select(a => new DisponibilitaMedicoResponse
+            {
+                Id = a.Id,
+                MedicoId = a.MedicoId,
+                MedicoNome = a.Medico.Nome,
+                MedicoCognome = a.Medico.Cognome,
+                Giorno = a.Giorno,
+                OraInizio = a.OraInizio,
+                OraFine = a.OraFine,
+            })
             .ToListAsync();
         }
 
