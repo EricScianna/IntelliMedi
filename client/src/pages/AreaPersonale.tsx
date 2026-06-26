@@ -77,6 +77,7 @@ function AreaPersonale() {
   const usersPagina = users?.slice(inizioPaginaUtenti, inizioPaginaUtenti + USERS_PER_PAGINA);
   // Stati per la gestione delle prenotazioni
   const [disponibilitaMedico, setDisponibilitaMedico] = useState<DisponibilitaMedico[] | null>(null);
+  const [mediciTipologia, setMediciTipologia] = useState<DisponibilitaMedico[] | null>(null);
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[] | null>(null);
   const [lunediCorrente, setLunediCorrente] = useState<Date>(() => {
     const oggi = new Date();
@@ -212,7 +213,14 @@ function AreaPersonale() {
     return false;
   }
 
-  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId: number | null, descrizione: string | null) {
+  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId: string | null, descrizione: string | null) {
+    //     const { mediciDisponibili, appuntamentiCella } = datiCella(giorno, giorno.getHours());
+
+    // //estrae gli id dei medici occupati
+    // const mediciOccupati = appuntamentiCella?.map((x) => x.medicoId);
+    // //controlla se ne esiste almeno uno che NON (!) è incluso
+    // const prenotabile = mediciDisponibili.find((m) => !mediciOccupati.includes(m));
+
     const nuovaData = new Date(giorno);
     nuovaData.setHours(oraAppuntamento, 0, 0, 0);
     const dataFormattata =
@@ -228,16 +236,13 @@ function AreaPersonale() {
     const risposta = await fetch(`${API_URL}/api/Appuntamenti`, {
       method: "POST",
       headers: createHeaders(true),
-      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: tipologiaSelezionataId, PazienteId: Number(utente?.id), medicoId, descrizione }),
+      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: Number(tipologiaSelezionataId), PazienteId: Number(utente?.id), medicoId, descrizione }),
     });
 
     if (risposta.ok) return caricaAppuntamentoPerTipologia(tipologiaSelezionataId ? tipologiaSelezionataId.toString() : "");
     if (!risposta.ok) {
-      if (risposta.status === 409) {
-        setErrore("Data già occupata");
-      } else if (risposta.status === 400) {
-        setErrore("Slot fuori dalla disponibilità del medico");
-      }
+      const messaggio = await risposta.text();
+      setErrore(messaggio);
       return false;
     }
   }
@@ -386,6 +391,11 @@ function AreaPersonale() {
     const dati = await getGenerico(`DisponibilitaMedico/GetByTipologia?tipologiaId=${id}`);
     setDisponibilitaMedico(dati);
   }
+  //chiamato dal paziente quando fa la ricerca su tendina
+  async function caricaMediciPerTipologia(id: string) {
+    const dati = await getGenerico(`DisponibilitaMedico/GetByTipologia?tipologiaId=${id}`);
+    setMediciTipologia(dati);
+  }
   //chiamato dal paziente quando fa la ricerca per tipologia
   async function caricaAppuntamentoPerTipologia(id: string) {
     const dati = await getGenerico(`Appuntamenti/GetByTipologia?tipologiaId=${id}`);
@@ -404,21 +414,17 @@ function AreaPersonale() {
 
   async function mostraPrenotazioni(id: string) {
     if (isPaziente) {
-      caricaAppuntamentoPerPaziente(id);
-      caricaListaTipologiaVisita();
+      await Promise.all([caricaAppuntamentoPerPaziente(id), caricaListaTipologiaVisita()]);
     }
     if (isMedico) {
-      caricaDisponibilitaPerMedico(id);
-      caricaAppuntamentoPerMedico(id);
-      //setTipoLista("DisponibilitaMedico");
+      await Promise.all([caricaDisponibilitaPerMedico(id), caricaAppuntamentoPerMedico(id)]);
     }
     if (isAdmin) {
       if (tipoLista === "Medici") {
-        caricaDisponibilitaPerMedico(id);
-        caricaAppuntamentoPerMedico(id);
+        await Promise.all([caricaDisponibilitaPerMedico(id), caricaAppuntamentoPerMedico(id)]);
       }
       if (tipoLista === "Pazienti") {
-        caricaAppuntamentoPerPaziente(id);
+        await caricaAppuntamentoPerPaziente(id);
       }
     }
     setSezionePrenotazioni("visualizzaPrenotazioni");
@@ -603,11 +609,15 @@ function AreaPersonale() {
                 isGiornoDisponibile={(giorno, ora) => oreDisponibiliDelGiorno(giorno.getDay()).includes(ora)}
                 onClickCasella={(giorno, ora) => gestisciCella(giorno, ora)}
                 onCaricaDisponibilitaPerTipologia={caricaDisponibilitaPerTipologia}
+                onCaricaDisponibilitaPerMedico={caricaDisponibilitaPerMedico}
+                onCaricaMediciPerTipologia={caricaMediciPerTipologia}
+                mediciTipologia={mediciTipologia}
                 tipologiaVisite={tipologiaVisite}
                 onPrenota={postAppuntamento}
                 onDisdici={cancellaAppuntamento}
                 onDisdiciById={cancellaAppuntamentoById}
                 onCaricaAppuntamentoPerTipologia={caricaAppuntamentoPerTipologia}
+                onCaricaAppuntamentoPerMedico={caricaAppuntamentoPerMedico}
                 statoCellaPaziente={(giorno, ora) => statoCellaPaziente(giorno, ora)}
                 statoCellaMedico={(giorno, ora) => statoCellaMedico(giorno, ora)}
                 utenteSelezionato={utenteSelezionato}
@@ -1014,11 +1024,15 @@ function Prenotazioni({
   isGiornoDisponibile,
   onClickCasella,
   onCaricaDisponibilitaPerTipologia,
+  onCaricaDisponibilitaPerMedico,
+  onCaricaMediciPerTipologia,
+  mediciTipologia,
   tipologiaVisite,
   onPrenota,
   onDisdici,
   onDisdiciById,
   onCaricaAppuntamentoPerTipologia,
+  onCaricaAppuntamentoPerMedico,
   appuntamenti,
   statoCellaPaziente,
   statoCellaMedico,
@@ -1033,12 +1047,16 @@ function Prenotazioni({
   grigliaOre: number[];
   isGiornoDisponibile: (giorno: Date, ora: number) => boolean;
   onClickCasella: (giorno: Date, ora: number) => void;
-  onCaricaDisponibilitaPerTipologia: (id: string) => void;
+  onCaricaDisponibilitaPerTipologia: (id: string) => Promise<void>;
+  onCaricaDisponibilitaPerMedico: (id: string) => Promise<void>;
+  onCaricaMediciPerTipologia: (id: string) => Promise<void>;
+  mediciTipologia: DisponibilitaMedico[] | null;
   tipologiaVisite: TipologiaVisita[] | null;
-  onPrenota: (giorno: Date, ora: number, tipologiaSelezionataId: number | null, descrizione: string | null) => void;
+  onPrenota: (giorno: Date, ora: number, tipologiaSelezionataId: string | null, descrizione: string | null) => void;
   onDisdici: (giorno: Date, ora: number, tipologiaSelezionataId: string | null) => void;
   onDisdiciById: (tipologiaSelezionataId: string) => void;
-  onCaricaAppuntamentoPerTipologia: (id: string) => void;
+  onCaricaAppuntamentoPerTipologia: (id: string) => Promise<void>;
+  onCaricaAppuntamentoPerMedico: (id: string) => Promise<void>;
   appuntamenti: Appuntamento[] | null;
   statoCellaPaziente: (giorno: Date, ora: number) => string;
   statoCellaMedico: (giorno: Date, ora: number) => string;
@@ -1052,7 +1070,8 @@ function Prenotazioni({
   const [giornoGestioneDisponibilita, setGiornoGestioneDisponibilita] = useState(1);
   const [oraInizioGestioneDisponibilita, setOraInizioGestioneDisponibilita] = useState(8);
   const [oraFineGestioneDisponibilita, setOraFineGestioneDisponibilita] = useState(19);
-  const [tipologiaSelezionataId, setTipologiaSelezionataId] = useState<string | null>(null);
+  const [tipologiaSelezionataId, setTipologiaSelezionataId] = useState("");
+  const [medicoSelezionatoId, setMedicoSelezionatoId] = useState("");
   const { utente, isPaziente, isMedico, isAdmin, setUtente } = useUtente();
 
   const titoloCalendario =
@@ -1088,7 +1107,7 @@ function Prenotazioni({
     return { controlloCella, coloreCella: mappaColori[controlloCella] };
   }
 
-  const mediciUnici = [...new Map(onDisponibilitaMedico?.map((d) => [d.medicoId, d])).values()];
+  const mediciUnici = [...new Map(mediciTipologia?.map((d) => [d.medicoId, d])).values()];
 
   return (
     <div className={styles.prenotazioniContainer}>
@@ -1119,11 +1138,10 @@ function Prenotazioni({
                               id="selTipologia"
                               className="form-select rounded-pill d-inline"
                               value={tipologiaSelezionataId ?? ""}
-                              onChange={(e) => {
-                                const id = Number(e.target.value);
-                                setTipologiaSelezionataId(id);
-                                onCaricaDisponibilitaPerTipologia(id.toString());
-                                onCaricaAppuntamentoPerTipologia(id.toString());
+                              onChange={async (e) => {
+                                setTipologiaSelezionataId(e.target.value);
+                                await onCaricaDisponibilitaPerTipologia(e.target.value);
+                                await onCaricaAppuntamentoPerTipologia(e.target.value);
                               }}
                             >
                               <option value="">—</option>
@@ -1255,7 +1273,7 @@ function Prenotazioni({
                                   onClick={() => {
                                     if (isPaziente) {
                                       if (giornoDisponibile && controlloCella === "prenotabile") onPrenota(giorno, ora, tipologiaSelezionataId, null);
-                                      else if (giornoDisponibile && controlloCella === "mio") onDisdici(giorno, ora, tipologiaSelezionataId?.toString() ?? "");
+                                      else if (giornoDisponibile && controlloCella === "mio") onDisdici(giorno, ora, tipologiaSelezionataId);
                                     } else if (controlloCella === "prenotabile" || controlloCella === "na") onClickCasella(giorno, ora);
                                     else if (controlloCella === "prenotato") onDisdici(giorno, ora, tipologiaSelezionataId?.toString() ?? "");
                                   }}
@@ -1296,9 +1314,16 @@ function Prenotazioni({
                                     <th scope="col" className={`${styles.w20} ps-4`}>
                                       Tipologia Visita
                                     </th>
-                                    <th className={`${styles.w20}`} scope="col">
-                                      Medico
-                                    </th>
+                                    {isPaziente && (
+                                      <th className={`${styles.w20}`} scope="col">
+                                        Medico
+                                      </th>
+                                    )}
+                                    {isMedico && (
+                                      <th className={`${styles.w20}`} scope="col">
+                                        Paziente
+                                      </th>
+                                    )}
                                     <th className={`${styles.w20}`} scope="col">
                                       Giorno
                                     </th>
@@ -1318,7 +1343,8 @@ function Prenotazioni({
                                       return (
                                         <tr key={appuntamento.id}>
                                           <td className="ps-4">{appuntamento.tipologiaVisita}</td>
-                                          <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>
+                                          {isPaziente && <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>}
+                                          {isMedico && <td>{`${appuntamento.pazienteNome} ${appuntamento.pazienteCognome}`}</td>}
                                           <td>{giorno}</td>
                                           <td>{ora}</td>
                                           <td>
@@ -1339,117 +1365,99 @@ function Prenotazioni({
                           </div>
                         </div>
                       </div>
-                      {/* <div className="p-3 row g-0 align-items-center pb-4">
-                  <div className="col-sm-6">
-                    <div>
-                      <p className="mb-sm-0">
-                        Mostrando {totaleUsers === 0 ? 0 : inizioPaginaUtenti + 1} a {Math.min(inizioPaginaUtenti + USERS_PER_PAGINA, totaleUsers)} di {totaleUsers} totali
-                      </p>
-                    </div>
-                  </div>
-                  <div className="col-sm-6 me-0">
-                    <div className="float-sm-end">
-                      <ul className="pagination mb-sm-0">
-                        <li className={`page-item ${indicePagina <= 1 ? "disabled" : ""}`}>
-                          <button className="btn page-link" onClick={() => onCambiaPagina(indicePagina - 1)} disabled={indicePagina <= 1}>
-                            <i className="bi bi-chevron-left"></i>
-                          </button>
-                        </li>
-                        <li className="page-item">
-                          <div className="btn-toolbar" role="toolbar">
-                            <div className="btn-group">
-                              {Array.from({ length: totalePagineUtenti }, (_, indice) => (
-                                <button key={indice} className={`btn btn-primary ${indicePagina === indice + 1 ? "active" : ""}`} onClick={() => onCambiaPagina(indice + 1)}>
-                                  {indice + 1}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </li>
-                        <li className={`page-item ${indicePagina >= totalePagineUtenti ? "disabled" : ""}`}>
-                          <button className="btn page-link" onClick={() => onCambiaPagina(indicePagina + 1)} disabled={indicePagina >= totalePagineUtenti}>
-                            <i className="bi bi-chevron-right"></i>
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div> */}
                     </div>
                   </div>
                 </div>
               </div>
+
               <div className="col-4">
                 <div className={`p-3 ${stylesShared.cardBorder}`}>
                   <div className="card">
                     <div className={`card-header text-white ${styles.titleMedisport}`}>
-                      <h5 className="m-2">Prenota la tua visita</h5>
+                      {isPaziente && <h5 className="m-2">Prenota nuova visita</h5>}
+                      {isMedico && <h5 className="m-2">Gestisci disponibilità</h5>}
                     </div>
-                    <div className="container">
+                    {isPaziente && (
+                      <div className="container">
+                        <div className="row p-3">
+                          <label htmlFor="selGiorno" className="form-label text-muted">
+                            Seleziona la tipologia di servizio
+                          </label>
+                          <select
+                            id="selTipologia"
+                            className="form-select"
+                            value={tipologiaSelezionataId}
+                            onChange={async (e) => {
+                              const id = e.target.value;
+                              await onCaricaMediciPerTipologia(id);
+                              setTipologiaSelezionataId(id);
+                            }}
+                          >
+                            <option value="" disabled hidden>
+                              Servizi
+                            </option>
+                            {tipologiaVisite?.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.descrizione}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="row p-3">
+                          <label htmlFor="selGiorno" className="form-label text-muted">
+                            Preferisci un professionista?
+                          </label>
+                          <select
+                            disabled={!mediciTipologia || mediciTipologia.length === 0}
+                            id="selOperatore"
+                            className="form-select"
+                            value={medicoSelezionatoId}
+                            onChange={(e) => {
+                              setMedicoSelezionatoId(e.target.value);
+                            }}
+                          >
+                            <option value="">Tutti gli operatori</option>
+                            {mediciUnici.map((m) => (
+                              <option key={m.medicoId} value={m.medicoId}>
+                                {m.medicoNome} {m.medicoCognome}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="row p-3">
+                          {mediciUnici?.length === 0 && (
+                            <label htmlFor="selGiorno" className="form-label text-muted">
+                              {" "}
+                              Nessun medico disponibile
+                            </label>
+                          )}
+                          <button
+                            disabled={tipologiaSelezionataId === "" || !mediciTipologia || mediciTipologia.length === 0}
+                            className="btn btn-success rounded-pill px-4 fw-bold"
+                            onClick={async () => {
+                              if (medicoSelezionatoId === "") {
+                                await Promise.all([onCaricaDisponibilitaPerTipologia(tipologiaSelezionataId), onCaricaAppuntamentoPerTipologia(tipologiaSelezionataId)]);
+                              } else {
+                                await Promise.all([onCaricaDisponibilitaPerMedico(medicoSelezionatoId), onCaricaAppuntamentoPerMedico(medicoSelezionatoId)]);
+                              }
+                              setSezionePrenotazioni("nuovaPrenotazione");
+                            }}
+                          >
+                            PRENOTA
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {isMedico && (
                       <div className="row p-3">
                         <label htmlFor="selGiorno" className="form-label text-muted">
-                          Seleziona la tipologia di servizio
+                          Aggiungi/rimuovi i giorni e le ore di disponibilità
                         </label>
-                        <select
-                          id="selTipologia"
-                          className="form-select"
-                          value={tipologiaSelezionataId ?? ""}
-                          onChange={(e) => {
-                            setTipologiaSelezionataId(e.target.value);
-                            onCaricaDisponibilitaPerTipologia(e.target.value);
-                            console.log(onDisponibilitaMedico);
-                          }}
-                        >
-                          <option value="" disabled hidden>
-                            Servizi
-                          </option>
-                          {tipologiaVisite?.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.descrizione}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="row p-3">
-                        <label htmlFor="selGiorno" className="form-label text-muted">
-                          Preferisci un professionista?
-                        </label>
-                        <select
-                          disabled={!onDisponibilitaMedico}
-                          id="selOperatore"
-                          className="form-select"
-                          value={tipologiaSelezionataId ?? ""}
-                          onChange={(e) => {
-                            const id = Number(e.target.value);
-                            // setTipologiaSelezionataId(id);
-                            // onCaricaDisponibilitaPerTipologia(id.toString());
-                            // onCaricaAppuntamentoPerTipologia(id.toString());
-                            // setSezionePrenotazioni("nuovaPrenotazione");
-                          }}
-                        >
-                          <option value="" disabled hidden>
-                            Operatore
-                          </option>
-                          {mediciUnici.map((m) => (
-                            <option key={m.medicoId} value={m.medicoId}>
-                              {m.medicoNome} {m.medicoCognome}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="row p-3">
-                        <button
-                          className="btn btn-outline-success rounded-pill px-4 fw-bold"
-                          onClick={() => {
-                            onCaricaDisponibilitaPerTipologia(tipologiaSelezionataId ?? "");
-                            onCaricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
-                            setSezionePrenotazioni("nuovaPrenotazione");
-                          }}
-                        >
-                          PRENOTA
+                        <button className="btn btn-success rounded-pill px-4 fw-bold" onClick={() => setSezionePrenotazioni("nuovaPrenotazione")}>
+                          CONTINUA
                         </button>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>

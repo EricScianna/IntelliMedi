@@ -9,6 +9,8 @@
         public int TipologiaVisitaId { get; set; }
         public string MedicoNome { get; set; }
         public string MedicoCognome { get; set; }
+        public string PazienteNome { get; set; }
+        public string PazienteCognome { get; set; }
         public string TipologiaVisita { get; set; }
         public string? Descrizione { get; set; }
     }

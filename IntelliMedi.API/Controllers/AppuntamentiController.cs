@@ -39,6 +39,8 @@ namespace IntelliMedi.API.Controllers
                 TipologiaVisitaId = a.TipologiaVisitaId,
                 MedicoNome = a.Medico.Nome,
                 MedicoCognome = a.Medico.Cognome,
+                PazienteNome = a.Paziente.Nome,
+                PazienteCognome = a.Paziente.Cognome,
                 TipologiaVisita = a.TipologiaVisita.Descrizione,
                 Descrizione = a.Descrizione,
             })
@@ -61,6 +63,8 @@ namespace IntelliMedi.API.Controllers
                 TipologiaVisitaId = a.TipologiaVisitaId,
                 MedicoNome = a.Medico.Nome,
                 MedicoCognome = a.Medico.Cognome,
+                PazienteNome = a.Paziente.Nome,
+                PazienteCognome = a.Paziente.Cognome,
                 TipologiaVisita = a.TipologiaVisita.Descrizione,
                 Descrizione = a.Descrizione,
 
@@ -111,7 +115,10 @@ namespace IntelliMedi.API.Controllers
             if (!medicoDisp) return BadRequest("Slot fuori dalla disponibilità del medico");
             //se quel medico è già impegnato in quella data: Conflict()
             if (await _context.Appuntamenti.AnyAsync(d => d.MedicoId == registrazione.MedicoId && d.Data == registrazione.Data))
-                return Conflict();
+                return Conflict("Il medico è già impegnato in un altro appuntamento");
+            //se il paziente ha già un appuntamento in quella data e ora
+            if (await _context.Appuntamenti.AnyAsync(d => d.PazienteId == registrazione.PazienteId && d.Data == registrazione.Data))
+                return Conflict("Esiste già un appuntamento in questa data e ora");
 
             Appuntamento appuntamento = new Appuntamento()
             {

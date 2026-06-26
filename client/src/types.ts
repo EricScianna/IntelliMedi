@@ -35,6 +35,8 @@ export interface Appuntamento {
   medicoId: number;
   medicoNome: string;
   medicoCognome: string;
+  pazienteNome: string;
+  pazienteCognome: string;  
   tipologiaVisita: string;
   descrizione?: string;
 }
