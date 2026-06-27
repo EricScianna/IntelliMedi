@@ -128,9 +128,9 @@
 
 .pannelloDisponibilita {
   position: absolute;
-  top: 9%; 
+  top: 9%;
   right: 0;
-  z-index: 0; 
+  z-index: 1000;
   padding: 1rem;
   background: #fff;
   border: 1px solid #dee2e6;

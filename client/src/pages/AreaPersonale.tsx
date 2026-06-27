@@ -39,10 +39,10 @@ function generaOrari(oraInizio: string, oraFine: string): number[] {
   return arrayOrari;
 }
 
-function titoloCella(isPaziente: boolean, giornoDisponibile: boolean): string {
-  if (isPaziente) return giornoDisponibile ? "Clicca per prenotare" : "";
-  return giornoDisponibile ? "Clicca per rimuovere" : "Clicca per rendere disponibile";
-}
+// function titoloCella(isPaziente: boolean, giornoDisponibile: boolean): string {
+//   if (isPaziente) return giornoDisponibile ? "Clicca per prenotare" : "";
+//   return giornoDisponibile ? "Clicca per rimuovere" : "Clicca per rendere disponibile";
+// }
 
 //COMPONENTE: AreaPersonale (PascalCase obbligatorio): funzione principale di una pagina React.
 //tranne useState, tutto quello che c'è all'interno viene ricreato ad ogni render
@@ -114,6 +114,7 @@ function AreaPersonale() {
     Amministratore: [
       { etichetta: "Pazienti", descrizione: "Visualizza e gestisci i pazienti del sistema", immagine: "bi-people", link: () => mostraListaUtenti("Pazienti") },
       { etichetta: "Medici", descrizione: "Visualizza e gestisci i medici del sistema", immagine: "bi-heart-pulse", link: () => mostraListaUtenti("Medici") },
+      { etichetta: "Prenotazioni", descrizione: "Crea nuova prenotazione", immagine: "bi-calendar", link: () => mostraPrenotazioni(idUtente ?? "") },
     ],
     Paziente: [
       { etichetta: "Anagrafica", descrizione: "Visualizza e modifica i tuoi dati personali", immagine: "bi-person", link: mostraAnagrafica },
@@ -213,13 +214,16 @@ function AreaPersonale() {
     return false;
   }
 
-  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId: string | null, descrizione: string | null) {
-    //     const { mediciDisponibili, appuntamentiCella } = datiCella(giorno, giorno.getHours());
-
-    // //estrae gli id dei medici occupati
-    // const mediciOccupati = appuntamentiCella?.map((x) => x.medicoId);
-    // //controlla se ne esiste almeno uno che NON (!) è incluso
-    // const prenotabile = mediciDisponibili.find((m) => !mediciOccupati.includes(m));
+  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) {
+    const { mediciDisponibiliId, appuntamentiCella } = datiCella(giorno, oraAppuntamento);
+    //estrae gli id dei medici occupati
+    const mediciOccupati = appuntamentiCella?.map((x) => x.medicoId);
+    //controlla se ne esiste almeno uno che NON (!) è incluso
+    const medicoId = mediciDisponibiliId.find((m) => !mediciOccupati.includes(m));
+    if (!medicoId) {
+      setErrore("Nessun medico disponibile");
+      return false;
+    }
 
     const nuovaData = new Date(giorno);
     nuovaData.setHours(oraAppuntamento, 0, 0, 0);
@@ -232,17 +236,21 @@ function AreaPersonale() {
       "T" +
       nuovaData.getHours().toString().padStart(2, "0") +
       ":00:00";
-    const medicoId = disponibilitaMedico?.find((d) => d.giorno === giorno.getDay() && Number.parseInt(d.oraInizio) === oraAppuntamento)?.medicoId;
     const risposta = await fetch(`${API_URL}/api/Appuntamenti`, {
       method: "POST",
       headers: createHeaders(true),
-      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: Number(tipologiaSelezionataId), PazienteId: Number(utente?.id), medicoId, descrizione }),
+      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: Number(tipologiaSelezionataId), PazienteId: Number(utente?.id), medicoId, descrizione: medicoSelezionatoId }),
     });
 
-    if (risposta.ok) return caricaAppuntamentoPerTipologia(tipologiaSelezionataId ? tipologiaSelezionataId.toString() : "");
+    if (risposta.ok) {
+      if (medicoSelezionatoId === "") {
+        return caricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
+      } else {
+        return caricaAppuntamentoPerMedico(medicoSelezionatoId ?? "");
+      }
+    }
     if (!risposta.ok) {
-      const messaggio = await risposta.text();
-      setErrore(messaggio);
+      setErrore(await risposta.text());
       return false;
     }
   }
@@ -360,26 +368,44 @@ function AreaPersonale() {
     mostraListaUtenti(tipoLista);
   }
 
-  async function cancellaAppuntamento(giorno: Date, ora: number, idTipologia: string | null) {
+  async function cancellaAppuntamento(giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) {
     const appuntamentiCella =
       appuntamenti?.filter((a) => {
         const nuovaData = new Date(a.data);
         return nuovaData.getHours() === ora && nuovaData.getFullYear() === giorno.getFullYear() && nuovaData.getMonth() === giorno.getMonth() && nuovaData.getDate() === giorno.getDate();
       }) ?? [];
-    console.log(appuntamentiCella);
 
-    const appuntamentoPersonale = appuntamentiCella.find((x) => (x.tipologiaVisitaId === Number(idTipologia) && isPaziente ? x.pazienteId === Number(utente?.id) : x.medicoId === Number(utente?.id)));
-    console.log(appuntamentoPersonale);
+    const appuntamentoPersonale = appuntamentiCella.find((x) => {
+      if (isPaziente) return x.pazienteId === Number(utente?.id);
+      if (isMedico) return x.medicoId === Number(utente?.id);
+      if (isAdmin && tipoLista === "Pazienti") return x.pazienteId === Number(utenteSelezionato?.id);
+      if (isAdmin && tipoLista === "Medici") return x.medicoId === Number(utenteSelezionato?.id);
+      return false; // nessun caso combacia
+    });
+
     if (appuntamentoPersonale) {
-      await deleteGenerico("Appuntamenti/" + appuntamentoPersonale.id.toString());
-      if (isPaziente) caricaAppuntamentoPerTipologia(idTipologia ?? "");
-      else caricaAppuntamentoPerMedico(utente?.id ?? "");
+      const risposta = await deleteGenerico("Appuntamenti/" + appuntamentoPersonale.id.toString());
+      if (risposta) {
+        if (isPaziente) {
+          if (medicoSelezionatoId === "") {
+            return caricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
+          } else {
+            return caricaAppuntamentoPerMedico(medicoSelezionatoId ?? "");
+          }
+        }
+      }
+
+      if (isMedico) caricaAppuntamentoPerMedico(utente?.id ?? "");
+      if (isAdmin) caricaAppuntamentoPerMedico(idUtente ?? "");
     }
   }
 
   async function cancellaAppuntamentoById(id: string) {
     await deleteGenerico("Appuntamenti/" + id.toString());
-    await caricaAppuntamentoPerPaziente(utente?.id ?? "");
+    if (isPaziente) await caricaAppuntamentoPerPaziente(utente?.id ?? "");
+    if (isMedico) await caricaAppuntamentoPerMedico(utente?.id ?? "");
+    if (isAdmin && tipoLista === "Pazienti") await caricaAppuntamentoPerPaziente(utenteSelezionato?.id.toString() ?? "");
+    if (isAdmin && tipoLista === "Medici") await caricaAppuntamentoPerMedico(utenteSelezionato?.id.toString() ?? "");
   }
 
   async function caricaDisponibilitaPerMedico(id: string) {
@@ -413,52 +439,52 @@ function AreaPersonale() {
   }
 
   async function mostraPrenotazioni(id: string) {
-    if (isPaziente) {
+    if (isPaziente || (isAdmin && tipoLista === "Pazienti")) {
       await Promise.all([caricaAppuntamentoPerPaziente(id), caricaListaTipologiaVisita()]);
     }
-    if (isMedico) {
+    if (isMedico || (isAdmin && tipoLista === "Medici")) {
       await Promise.all([caricaDisponibilitaPerMedico(id), caricaAppuntamentoPerMedico(id)]);
     }
-    if (isAdmin) {
-      if (tipoLista === "Medici") {
-        await Promise.all([caricaDisponibilitaPerMedico(id), caricaAppuntamentoPerMedico(id)]);
-      }
-      if (tipoLista === "Pazienti") {
-        await caricaAppuntamentoPerPaziente(id);
-      }
-    }
+    // if (isAdmin) {
+    //   if (tipoLista === "Medici") {
+    //     await Promise.all([caricaDisponibilitaPerMedico(id), caricaAppuntamentoPerMedico(id)]);
+    //   }
+    //   if (tipoLista === "Pazienti") {
+    //     await Promise.all([caricaAppuntamentoPerPaziente(id), caricaListaTipologiaVisita()]);
+    //   }
+    // }
     setSezionePrenotazioni("visualizzaPrenotazioni");
     setSezioneContent("prenotazioni");
   }
 
   function datiCella(giorno: Date, ora: number) {
     //restituisce medicoId del medico disponibile in quel giorno e in quell'ora
-    const mediciDisponibili = disponibilitaMedico?.filter((d) => d.giorno === giorno.getDay() && Number.parseInt(d.oraInizio) === ora).map((x) => x.medicoId) ?? [];
+    const mediciDisponibiliId = disponibilitaMedico?.filter((d) => d.giorno === giorno.getDay() && Number.parseInt(d.oraInizio) === ora).map((x) => x.medicoId) ?? [];
     //per ogni appuntamento fa una copia, filtra le copie per data, e poi ritorna solo quelli === alla nostra data
     const appuntamentiCella =
       appuntamenti?.filter((a) => {
         const nuovaData = new Date(a.data);
         return nuovaData.getHours() === ora && nuovaData.getFullYear() === giorno.getFullYear() && nuovaData.getMonth() === giorno.getMonth() && nuovaData.getDate() === giorno.getDate();
       }) ?? [];
-    return { mediciDisponibili, appuntamentiCella };
+    return { mediciDisponibiliId, appuntamentiCella };
   }
 
   function statoCellaPaziente(giorno: Date, ora: number): "mio" | "prenotabile" | "pieno" {
-    const { mediciDisponibili, appuntamentiCella } = datiCella(giorno, ora);
+    const { mediciDisponibiliId, appuntamentiCella } = datiCella(giorno, ora);
     //controlla se negli appuntamenti c'è l'id paziente (some restituisce boolean)
     const mio = appuntamentiCella.some((x) => x.pazienteId === (isPaziente ? Number(utente?.id) : Number(utenteSelezionato?.id)));
     //estrae gli id dei medici occupati
     const mediciOccupati = appuntamentiCella?.map((x) => x.medicoId);
     //controlla se ne esiste almeno uno che NON (!) è incluso
-    const prenotabile = mediciDisponibili.some((m) => !mediciOccupati.includes(m));
+    const prenotabile = mediciDisponibiliId.some((m) => !mediciOccupati.includes(m));
     if (mio) return "mio";
     else if (prenotabile) return "prenotabile";
     else return "pieno";
   }
 
   function statoCellaMedico(giorno: Date, ora: number): "prenotato" | "prenotabile" | "na" {
-    const { mediciDisponibili, appuntamentiCella } = datiCella(giorno, ora);
-    const medicoDisponibile = mediciDisponibili.includes(isMedico ? Number(utente?.id) : Number(utenteSelezionato?.id));
+    const { mediciDisponibiliId, appuntamentiCella } = datiCella(giorno, ora);
+    const medicoDisponibile = mediciDisponibiliId.includes(isMedico ? Number(utente?.id) : Number(utenteSelezionato?.id));
     if (medicoDisponibile) {
       //controlla se negli appuntamenti c'è l'id paziente (some restituisce boolean)
       const prenotato = appuntamentiCella.some((x) => x.medicoId === (isMedico ? Number(utente?.id) : Number(utenteSelezionato?.id)));
@@ -469,6 +495,7 @@ function AreaPersonale() {
 
   async function gestisciCella(giorno: Date, ora: number) {
     let ok;
+    console.log("quiz");
     const giornoDisponibile = oreDisponibiliDelGiorno(giorno.getDay()).includes(ora);
     if (giornoDisponibile) {
       const cella = disponibilitaMedico?.find((d) => d.giorno === giorno.getDay() && Number.parseInt(d.oraInizio) === ora);
@@ -625,7 +652,7 @@ function AreaPersonale() {
                 appuntamenti={appuntamenti}
                 setSezionePrenotazioni={setSezionePrenotazioni}
                 sezionePrenotazioni={sezionePrenotazioni}
-                onDisponibilitaMedico={disponibilitaMedico}
+                onMostraPrenotazioni={mostraPrenotazioni}
               ></Prenotazioni>
             )}
           </div>
@@ -1040,7 +1067,7 @@ function Prenotazioni({
   tipoLista,
   sezionePrenotazioni,
   setSezionePrenotazioni,
-  onDisponibilitaMedico,
+  onMostraPrenotazioni,
 }: Readonly<{
   onAggiungiFascia: (giorno: number, oraInizio: number, oraFine: number) => void;
   giorniSettimana: Date[];
@@ -1052,8 +1079,8 @@ function Prenotazioni({
   onCaricaMediciPerTipologia: (id: string) => Promise<void>;
   mediciTipologia: DisponibilitaMedico[] | null;
   tipologiaVisite: TipologiaVisita[] | null;
-  onPrenota: (giorno: Date, ora: number, tipologiaSelezionataId: string | null, descrizione: string | null) => void;
-  onDisdici: (giorno: Date, ora: number, tipologiaSelezionataId: string | null) => void;
+  onPrenota: (giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) => void;
+  onDisdici: (giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) => void;
   onDisdiciById: (tipologiaSelezionataId: string) => void;
   onCaricaAppuntamentoPerTipologia: (id: string) => Promise<void>;
   onCaricaAppuntamentoPerMedico: (id: string) => Promise<void>;
@@ -1064,7 +1091,7 @@ function Prenotazioni({
   tipoLista: string;
   sezionePrenotazioni: string;
   setSezionePrenotazioni: React.Dispatch<React.SetStateAction<"nuovaPrenotazione" | "visualizzaPrenotazioni">>;
-  onDisponibilitaMedico: DisponibilitaMedico[] | null;
+  onMostraPrenotazioni: (id: string) => void;
 }>) {
   const [mostraFormFasciaDisponibilita, setMostraFormFasciaDisponibilita] = useState(false);
   const [giornoGestioneDisponibilita, setGiornoGestioneDisponibilita] = useState(1);
@@ -1072,10 +1099,9 @@ function Prenotazioni({
   const [oraFineGestioneDisponibilita, setOraFineGestioneDisponibilita] = useState(19);
   const [tipologiaSelezionataId, setTipologiaSelezionataId] = useState("");
   const [medicoSelezionatoId, setMedicoSelezionatoId] = useState("");
-  const { utente, isPaziente, isMedico, isAdmin, setUtente } = useUtente();
+  const { utente, isPaziente, isMedico, isAdmin } = useUtente();
 
-  const titoloCalendario =
-    tipoLista === "Medici" ? `Calendario del Dr. ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}` : `Prenotazioni di ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}`;
+  const titoloCalendario = tipoLista === "Medici" ? `del Dr. ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}` : `di ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}`;
 
   const COLORI_PAZIENTE: Record<string, string> = { mio: "bg-success", prenotabile: "bg-info", pieno: "bg-light" };
   const COLORI_MEDICO: Record<string, string> = { prenotato: "bg-danger", prenotabile: "bg-success", na: "bg-light" };
@@ -1107,102 +1133,90 @@ function Prenotazioni({
     return { controlloCella, coloreCella: mappaColori[controlloCella] };
   }
 
+  function datiAzioneCella(giorno: Date, ora: number, giornoDisponibile: boolean, controlloCella: string) {
+    if (isPaziente) {
+      if (giornoDisponibile && controlloCella === "prenotabile") return { titolo: "Clicca per prenotare", azione: () => onPrenota(giorno, ora, tipologiaSelezionataId, medicoSelezionatoId) };
+      if (giornoDisponibile && controlloCella === "mio") return { titolo: "Clicca per disdire", azione: () => onDisdici(giorno, ora, tipologiaSelezionataId, medicoSelezionatoId) };
+    } else {
+      if (controlloCella === "prenotabile" || controlloCella === "na") return { titolo: "Clicca per rendere disponibile", azione: () => onClickCasella(giorno, ora) };
+      if (controlloCella === "prenotato") return { titolo: "Clicca per disdire", azione: () => onDisdici(giorno, ora, tipologiaSelezionataId) };
+    }
+    return { titolo: "", azione: undefined }; // nessuna azione possibile
+  }
+
   const mediciUnici = [...new Map(mediciTipologia?.map((d) => [d.medicoId, d])).values()];
 
   return (
     <div className={styles.prenotazioniContainer}>
-      <div className="row g-0">
+      <div className="row">
         {sezionePrenotazioni === "nuovaPrenotazione" && (
           <div className={`p-3  ${stylesShared.cardBorder}`}>
             <div className={`card ${styles.projectListTableColor}`}>
               <div className={`card-header text-white ${styles.titleMedisport}`}>
                 <div className="row">
                   <div className="col-6">
-                    {isAdmin && <h5 className="m-2">{titoloCalendario}</h5>}
+                    {isAdmin && <h5 className="m-2">Calendario {titoloCalendario}</h5>}
                     {!isAdmin && <h5 className="m-2">Calendario prenotazioni</h5>}
                   </div>
                   <div className="col-6 d-flex justify-content-end">
                     {!isPaziente && (
-                      <button className="btn btn-success" onClick={() => setMostraFormFasciaDisponibilita((v) => !v)}>
+                      <button className="btn btn-success me-3" onClick={() => setMostraFormFasciaDisponibilita((v) => !v)}>
                         <i className="bi-plus-lg"></i> Fascia oraria
                       </button>
                     )}
-                    {isPaziente && (
-                      <div className="container">
-                        <div className="row align-items-center">
-                          <div className="col-sm-12 col-md-5">
-                            <span className="text-white fw-bold fs-4">PRENOTA LA TUA VISITA</span>
-                          </div>
-                          <div className="col-12 col-md-7 d-flex flex-column flex-md-row ">
-                            <select
-                              id="selTipologia"
-                              className="form-select rounded-pill d-inline"
-                              value={tipologiaSelezionataId ?? ""}
-                              onChange={async (e) => {
-                                setTipologiaSelezionataId(e.target.value);
-                                await onCaricaDisponibilitaPerTipologia(e.target.value);
-                                await onCaricaAppuntamentoPerTipologia(e.target.value);
-                              }}
-                            >
-                              <option value="">—</option>
-                              {tipologiaVisite?.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.descrizione}
+                    <button className="btn btn-danger" onClick={() => onMostraPrenotazioni(isAdmin ? (utenteSelezionato?.id.toString() ?? "") : (utente?.id ?? ""))}>
+                      Indietro <i className="bi-box-arrow-left"></i>
+                    </button>
+                    {mostraFormFasciaDisponibilita && (
+                      <div className={`${styles.pannelloDisponibilita} me-4`}>
+                        <div className={`d-flex gap-3 align-items-end p-3 ${stylesShared.cardBorder}`}>
+                          <div>
+                            <label htmlFor="selGiorno" className="form-label text-muted">
+                              Giorno
+                            </label>
+                            <select id="selGiorno" className="form-select" value={giornoGestioneDisponibilita} onChange={(e) => setGiornoGestioneDisponibilita(Number(e.target.value))}>
+                              {GIORNI_SETTIMANA.map((giorno) => (
+                                <option key={giorno.indice} value={giorno.indice}>
+                                  {giorno.nome}
                                 </option>
                               ))}
                             </select>
                           </div>
+                          <div>
+                            <label htmlFor="selOraInizio" className="form-label text-muted">
+                              Dalle
+                            </label>
+                            <select id="selOraInizio" className="form-select" value={oraInizioGestioneDisponibilita} onChange={(e) => setOraInizioGestioneDisponibilita(Number(e.target.value))}>
+                              {grigliaOre.map((ora) => (
+                                <option key={ora} value={ora}>
+                                  {ora.toString().padStart(2, "0")}:00
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor="selOraFine" className="form-label text-muted">
+                              Alle
+                            </label>
+                            <select id="selOraFine" className="form-select" value={oraFineGestioneDisponibilita} onChange={(e) => setOraFineGestioneDisponibilita(Number(e.target.value))}>
+                              {grigliaOre.map((ora) => (
+                                <option key={ora} value={ora}>
+                                  {ora.toString().padStart(2, "0")}:00
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-success"
+                            onClick={() => {
+                              onAggiungiFascia(giornoGestioneDisponibilita, oraInizioGestioneDisponibilita, oraFineGestioneDisponibilita);
+                              setMostraFormFasciaDisponibilita(false);
+                            }}
+                          >
+                            <i className="bi-check-lg"></i> Conferma
+                          </button>
                         </div>
-                      </div>
-                    )}
-                    {mostraFormFasciaDisponibilita && (
-                      <div className={`${styles.pannelloDisponibilita} me-4`}>
-                        <div>
-                          <label htmlFor="selGiorno" className="form-label">
-                            Giorno
-                          </label>
-                          <select id="selGiorno" className="form-select" value={giornoGestioneDisponibilita} onChange={(e) => setGiornoGestioneDisponibilita(Number(e.target.value))}>
-                            {GIORNI_SETTIMANA.map((giorno) => (
-                              <option key={giorno.indice} value={giorno.indice}>
-                                {giorno.nome}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label htmlFor="selOraInizio" className="form-label">
-                            Dalle
-                          </label>
-                          <select id="selOraInizio" className="form-select" value={oraInizioGestioneDisponibilita} onChange={(e) => setOraInizioGestioneDisponibilita(Number(e.target.value))}>
-                            {grigliaOre.map((ora) => (
-                              <option key={ora} value={ora}>
-                                {ora.toString().padStart(2, "0")}:00
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label htmlFor="selOraFine" className="form-label">
-                            Alle
-                          </label>
-                          <select id="selOraFine" className="form-select" value={oraFineGestioneDisponibilita} onChange={(e) => setOraFineGestioneDisponibilita(Number(e.target.value))}>
-                            {grigliaOre.map((ora) => (
-                              <option key={ora} value={ora}>
-                                {ora.toString().padStart(2, "0")}:00
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <button
-                          type="button"
-                          className="btn btn-success"
-                          onClick={() => {
-                            onAggiungiFascia(giornoGestioneDisponibilita, oraInizioGestioneDisponibilita, oraFineGestioneDisponibilita);
-                            setMostraFormFasciaDisponibilita(false);
-                          }}
-                        >
-                          <i className="bi-check-lg"></i> Conferma
-                        </button>
                       </div>
                     )}
                   </div>
@@ -1213,7 +1227,7 @@ function Prenotazioni({
                   <div className="table-responsive">
                     {!isPaziente && (
                       <div className="d-flex align-items-center gap-4 px-3 py-2">
-                        <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la tua disponibilità</span>
+                        <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la disponibilità</span>
                         <span className="d-flex align-items-center gap-2">
                           <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-light`}></span>
                           <span> Libera</span>
@@ -1264,21 +1278,8 @@ function Prenotazioni({
                             {giorniSettimana.map((giorno) => {
                               const giornoDisponibile = isGiornoDisponibile(giorno, ora);
                               const { coloreCella, controlloCella } = gestioneCelle(giorno, ora);
-                              return (
-                                <td
-                                  title={titoloCella(isPaziente, giornoDisponibile)}
-                                  key={giorno.toISOString()}
-                                  // il paziente può cliccare solo sulle caselle verdi. medico e admin su tutte
-                                  className={`${styles.cellStyle} ${coloreCella} ${!isPaziente || giornoDisponibile ? styles.cellStylePointer : ""}`}
-                                  onClick={() => {
-                                    if (isPaziente) {
-                                      if (giornoDisponibile && controlloCella === "prenotabile") onPrenota(giorno, ora, tipologiaSelezionataId, null);
-                                      else if (giornoDisponibile && controlloCella === "mio") onDisdici(giorno, ora, tipologiaSelezionataId);
-                                    } else if (controlloCella === "prenotabile" || controlloCella === "na") onClickCasella(giorno, ora);
-                                    else if (controlloCella === "prenotato") onDisdici(giorno, ora, tipologiaSelezionataId?.toString() ?? "");
-                                  }}
-                                ></td>
-                              );
+                              const { titolo, azione } = datiAzioneCella(giorno, ora, giornoDisponibile, controlloCella);
+                              return <td title={titolo} key={giorno.toISOString()} className={`${styles.cellStyle} ${coloreCella} ${azione ? styles.cellStylePointer : ""}`} onClick={azione}></td>;
                             })}
                           </tr>
                         ))}
@@ -1295,89 +1296,85 @@ function Prenotazioni({
             <div className="row">
               <div className="col-8">
                 <div className={`p-3 ${stylesShared.cardBorder}`}>
-                  <div className="card">
-                    <div className={`card ${styles.projectListTableColor}`}>
-                      <div className={`card-header text-white ${styles.titleMedisport}`}>
-                        <div className="row">
-                          <div className="col-6">
-                            <h5 className="m-2">Prenotazioni confermate</h5>
-                          </div>
+                  <div className={`card ${styles.projectListTableColor}`}>
+                    <div className={`card-header text-white ${styles.titleMedisport}`}>
+                      <div className="row">
+                        <div className="col-6">
+                          {isAdmin && <h5 className="m-2">Prenotazioni confermate {titoloCalendario}</h5>}
+                          {!isAdmin && <h5 className="m-2">Prenotazioni confermate</h5>}
                         </div>
                       </div>
-                      <div className="row">
-                        <div className="col-lg-12">
-                          <div className="">
-                            <div className="table-responsive">
-                              <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
-                                <thead>
-                                  <tr>
-                                    <th scope="col" className={`${styles.w20} ps-4`}>
-                                      Tipologia Visita
-                                    </th>
-                                    {isPaziente && (
-                                      <th className={`${styles.w20}`} scope="col">
-                                        Medico
-                                      </th>
-                                    )}
-                                    {isMedico && (
-                                      <th className={`${styles.w20}`} scope="col">
-                                        Paziente
-                                      </th>
-                                    )}
-                                    <th className={`${styles.w20}`} scope="col">
-                                      Giorno
-                                    </th>
-                                    <th className={`${styles.w20}`} scope="col">
-                                      Ora
-                                    </th>
-                                    <th className={`${styles.w10}`} scope="col">
-                                      Gestione
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {appuntamenti
-                                    ?.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
-                                    .map((appuntamento) => {
-                                      const { giorno, ora } = formattaData(appuntamento.data);
-                                      return (
-                                        <tr key={appuntamento.id}>
-                                          <td className="ps-4">{appuntamento.tipologiaVisita}</td>
-                                          {isPaziente && <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>}
-                                          {isMedico && <td>{`${appuntamento.pazienteNome} ${appuntamento.pazienteCognome}`}</td>}
-                                          <td>{giorno}</td>
-                                          <td>{ora}</td>
-                                          <td>
-                                            <ul className="list-inline m-0">
-                                              <li className="list-inline-item position-relative">
-                                                <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => onDisdiciById(appuntamento.id.toString())}>
-                                                  <i className="bi bi-trash font-size-18"></i>
-                                                </button>
-                                              </li>
-                                            </ul>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
+                    </div>
+                    <div className="row">
+                      <div className="col-lg-12">
+                        <div className="table-responsive">
+                          <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
+                            <thead>
+                              <tr>
+                                <th scope="col" className={`${styles.w20} ps-4`}>
+                                  Tipologia Visita
+                                </th>
+                                {(isPaziente || (isAdmin && tipoLista === "Pazienti")) && (
+                                  <th className={`${styles.w20}`} scope="col">
+                                    Medico
+                                  </th>
+                                )}
+                                {(isMedico || (isAdmin && tipoLista === "Medici")) && (
+                                  <th className={`${styles.w20}`} scope="col">
+                                    Paziente
+                                  </th>
+                                )}
+                                <th className={`${styles.w20}`} scope="col">
+                                  Giorno
+                                </th>
+                                <th className={`${styles.w20}`} scope="col">
+                                  Ora
+                                </th>
+                                <th className={`${styles.w10}`} scope="col">
+                                  Gestione
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {appuntamenti
+                                ?.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
+                                .map((appuntamento) => {
+                                  const { giorno, ora } = formattaData(appuntamento.data);
+                                  return (
+                                    <tr key={appuntamento.id}>
+                                      <td className="ps-4">{appuntamento.tipologiaVisita}</td>
+                                      {(isPaziente || (isAdmin && tipoLista === "Pazienti")) && <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>}
+                                      {(isMedico || (isAdmin && tipoLista === "Medici")) && <td>{`${appuntamento.pazienteNome} ${appuntamento.pazienteCognome}`}</td>}
+                                      <td>{giorno}</td>
+                                      <td>{ora}</td>
+                                      <td>
+                                        <ul className="list-inline m-0">
+                                          <li className="list-inline-item position-relative">
+                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => onDisdiciById(appuntamento.id.toString())}>
+                                              <i className="bi bi-trash font-size-18"></i>
+                                            </button>
+                                          </li>
+                                        </ul>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-
               <div className="col-4">
                 <div className={`p-3 ${stylesShared.cardBorder}`}>
                   <div className="card">
                     <div className={`card-header text-white ${styles.titleMedisport}`}>
-                      {isPaziente && <h5 className="m-2">Prenota nuova visita</h5>}
-                      {isMedico && <h5 className="m-2">Gestisci disponibilità</h5>}
+                      {(isPaziente || (isAdmin && tipoLista === "Pazienti")) && <h5 className="m-2">Prenota nuova visita</h5>}
+                      {(isMedico || (isAdmin && tipoLista === "Medici")) && <h5 className="m-2">Gestisci disponibilità</h5>}
                     </div>
-                    {isPaziente && (
+                    {(isPaziente || (isAdmin && tipoLista === "Pazienti")) && (
                       <div className="container">
                         <div className="row p-3">
                           <label htmlFor="selGiorno" className="form-label text-muted">
@@ -1448,7 +1445,7 @@ function Prenotazioni({
                         </div>
                       </div>
                     )}
-                    {isMedico && (
+                    {(isMedico || (isAdmin && tipoLista === "Medici")) && (
                       <div className="row p-3">
                         <label htmlFor="selGiorno" className="form-label text-muted">
                           Aggiungi/rimuovi i giorni e le ore di disponibilità
