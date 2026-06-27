@@ -39,11 +39,6 @@ function generaOrari(oraInizio: string, oraFine: string): number[] {
   return arrayOrari;
 }
 
-// function titoloCella(isPaziente: boolean, giornoDisponibile: boolean): string {
-//   if (isPaziente) return giornoDisponibile ? "Clicca per prenotare" : "";
-//   return giornoDisponibile ? "Clicca per rimuovere" : "Clicca per rendere disponibile";
-// }
-
 //COMPONENTE: AreaPersonale (PascalCase obbligatorio): funzione principale di una pagina React.
 //tranne useState, tutto quello che c'è all'interno viene ricreato ad ogni render
 //Ogni setState prenota un render, il valore si aggiorna solo al render successivo
@@ -65,7 +60,7 @@ function AreaPersonale() {
   const navigate = useNavigate();
   const [sezioneContent, setSezioneContent] = useState<"contentCards" | "anagrafica" | "prenotazioni" | "recensioni" | "listaUtenti" | "creaMedico">("contentCards");
   const [sezioneAnagrafica, setSezioneAnagrafica] = useState<"visualizza" | "modifica">("visualizza");
-  const [sezionePrenotazioni, setSezionePrenotazioni] = useState<"visualizzaPrenotazioni" | "nuovaPrenotazione">("visualizzaPrenotazioni");
+  const [sezionePrenotazioni, setSezionePrenotazioni] = useState<"visualizzaPrenotazioni" | "nuovaPrenotazioneCalendario" | "nuovaPrenotazioneAdmin">("visualizzaPrenotazioni");
   const [tipoLista, setTipoLista] = useState(""); //usato dall'amministratore quando seleziona un utente
   const [sidebarChiusa, setSidebarChiusa] = useState(false);
   // Stati per la gestione della lista users
@@ -77,6 +72,7 @@ function AreaPersonale() {
   const usersPagina = users?.slice(inizioPaginaUtenti, inizioPaginaUtenti + USERS_PER_PAGINA);
   // Stati per la gestione delle prenotazioni
   const [disponibilitaMedico, setDisponibilitaMedico] = useState<DisponibilitaMedico[] | null>(null);
+  const [tuttiMedici, setTuttiMedici] = useState<DisponibilitaMedico[] | null>(null);
   const [mediciTipologia, setMediciTipologia] = useState<DisponibilitaMedico[] | null>(null);
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[] | null>(null);
   const [lunediCorrente, setLunediCorrente] = useState<Date>(() => {
@@ -112,9 +108,9 @@ function AreaPersonale() {
 
   const vociPerRuolo: Record<string, VoceMenu[]> = {
     Amministratore: [
+      { etichetta: "Nuova Prenotazione", descrizione: "Crea nuova prenotazione", immagine: "bi-calendar", link: nuovaPrenotazioneAdmin },
       { etichetta: "Pazienti", descrizione: "Visualizza e gestisci i pazienti del sistema", immagine: "bi-people", link: () => mostraListaUtenti("Pazienti") },
       { etichetta: "Medici", descrizione: "Visualizza e gestisci i medici del sistema", immagine: "bi-heart-pulse", link: () => mostraListaUtenti("Medici") },
-      { etichetta: "Prenotazioni", descrizione: "Crea nuova prenotazione", immagine: "bi-calendar", link: () => mostraPrenotazioni(idUtente ?? "") },
     ],
     Paziente: [
       { etichetta: "Anagrafica", descrizione: "Visualizza e modifica i tuoi dati personali", immagine: "bi-person", link: mostraAnagrafica },
@@ -142,6 +138,15 @@ function AreaPersonale() {
     }
     return headers;
   }, []);
+
+  function nuovaPrenotazioneAdmin() {
+    setTipoLista(""); // reset, per pulizia
+    setUtenteSelezionato(null); // niente utente "vecchio"
+    caricaListaTipologiaVisita(); // i dati che serviranno
+    caricaTuttiMedici();
+    setSezionePrenotazioni("nuovaPrenotazioneAdmin");
+    setSezioneContent("prenotazioni");
+  }
 
   function oreDisponibiliDelGiorno(giorno: number): number[] {
     // filtra disponibilitaMedico per il giorno richiesto, poi flatMap con generaOrari
@@ -239,7 +244,7 @@ function AreaPersonale() {
     const risposta = await fetch(`${API_URL}/api/Appuntamenti`, {
       method: "POST",
       headers: createHeaders(true),
-      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: Number(tipologiaSelezionataId), PazienteId: Number(utente?.id), medicoId, descrizione: medicoSelezionatoId }),
+      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: Number(tipologiaSelezionataId), PazienteId: Number(idUtente), medicoId, descrizione: medicoSelezionatoId }),
     });
 
     if (risposta.ok) {
@@ -376,17 +381,17 @@ function AreaPersonale() {
       }) ?? [];
 
     const appuntamentoPersonale = appuntamentiCella.find((x) => {
-      if (isPaziente) return x.pazienteId === Number(utente?.id);
-      if (isMedico) return x.medicoId === Number(utente?.id);
-      if (isAdmin && tipoLista === "Pazienti") return x.pazienteId === Number(utenteSelezionato?.id);
-      if (isAdmin && tipoLista === "Medici") return x.medicoId === Number(utenteSelezionato?.id);
+      if (isPaziente) return x.pazienteId === Number(idUtente);
+      if (isMedico) return x.medicoId === Number(idUtente);
+      if (isAdmin && tipoLista === "Pazienti") return x.pazienteId === Number(idUtente);
+      if (isAdmin && tipoLista === "Medici") return x.medicoId === Number(idUtente);
       return false; // nessun caso combacia
     });
 
     if (appuntamentoPersonale) {
       const risposta = await deleteGenerico("Appuntamenti/" + appuntamentoPersonale.id.toString());
       if (risposta) {
-        if (isPaziente) {
+        if (isPaziente || (isAdmin && tipoLista === "Pazienti")) {
           if (medicoSelezionatoId === "") {
             return caricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
           } else {
@@ -404,8 +409,8 @@ function AreaPersonale() {
     await deleteGenerico("Appuntamenti/" + id.toString());
     if (isPaziente) await caricaAppuntamentoPerPaziente(utente?.id ?? "");
     if (isMedico) await caricaAppuntamentoPerMedico(utente?.id ?? "");
-    if (isAdmin && tipoLista === "Pazienti") await caricaAppuntamentoPerPaziente(utenteSelezionato?.id.toString() ?? "");
-    if (isAdmin && tipoLista === "Medici") await caricaAppuntamentoPerMedico(utenteSelezionato?.id.toString() ?? "");
+    if (isAdmin && tipoLista === "Pazienti") await caricaAppuntamentoPerPaziente(idUtente ?? "");
+    if (isAdmin && tipoLista === "Medici") await caricaAppuntamentoPerMedico(idUtente ?? "");
   }
 
   async function caricaDisponibilitaPerMedico(id: string) {
@@ -421,6 +426,11 @@ function AreaPersonale() {
   async function caricaMediciPerTipologia(id: string) {
     const dati = await getGenerico(`DisponibilitaMedico/GetByTipologia?tipologiaId=${id}`);
     setMediciTipologia(dati);
+  }
+  //chiamato dall'admin quando crea nuova prenotazione senza scegliere tipologia
+  async function caricaTuttiMedici() {
+    const dati = await getGenerico(`DisponibilitaMedico`);
+    setTuttiMedici(dati);
   }
   //chiamato dal paziente quando fa la ricerca per tipologia
   async function caricaAppuntamentoPerTipologia(id: string) {
@@ -445,14 +455,6 @@ function AreaPersonale() {
     if (isMedico || (isAdmin && tipoLista === "Medici")) {
       await Promise.all([caricaDisponibilitaPerMedico(id), caricaAppuntamentoPerMedico(id)]);
     }
-    // if (isAdmin) {
-    //   if (tipoLista === "Medici") {
-    //     await Promise.all([caricaDisponibilitaPerMedico(id), caricaAppuntamentoPerMedico(id)]);
-    //   }
-    //   if (tipoLista === "Pazienti") {
-    //     await Promise.all([caricaAppuntamentoPerPaziente(id), caricaListaTipologiaVisita()]);
-    //   }
-    // }
     setSezionePrenotazioni("visualizzaPrenotazioni");
     setSezioneContent("prenotazioni");
   }
@@ -637,6 +639,7 @@ function AreaPersonale() {
                 onClickCasella={(giorno, ora) => gestisciCella(giorno, ora)}
                 onCaricaDisponibilitaPerTipologia={caricaDisponibilitaPerTipologia}
                 onCaricaDisponibilitaPerMedico={caricaDisponibilitaPerMedico}
+                tuttiMedici={tuttiMedici}
                 onCaricaMediciPerTipologia={caricaMediciPerTipologia}
                 mediciTipologia={mediciTipologia}
                 tipologiaVisite={tipologiaVisite}
@@ -665,6 +668,35 @@ function AreaPersonale() {
 
 // ----------------- COMPONENTI -----------------
 // function Nome ({destructuring dei parametri. React passa le props}: Readonly<{tipo oggetto. TypeScript. Dopo : descrive la forma del parametro}>)
+function ConfermaEliminazione({ mostra, messaggio, onConferma, onAnnulla }: Readonly<{ mostra: boolean; messaggio: string; onConferma: () => void; onAnnulla: () => void }>) {
+  if (!mostra) return null; // se non deve mostrarsi, non renderizza nulla
+  return (
+    <>
+      <div className="modal d-block" tabIndex={-1}>
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Conferma eliminazione</h5>
+              <button type="button" className="btn-close" onClick={onAnnulla}></button>
+            </div>
+            <div className="modal-body">
+              <p className="m-0">{messaggio}</p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={onAnnulla}>
+                Annulla
+              </button>
+              <button type="button" className="btn btn-danger" onClick={onConferma}>
+                Elimina
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop show"></div>
+    </>
+  );
+}
 function Header({ clickCards, nomeVisualizzato, clickLogout }: Readonly<{ clickCards: () => void; nomeVisualizzato: string; clickLogout: () => void }>) {
   return (
     <header className="header">
@@ -1053,6 +1085,7 @@ function Prenotazioni({
   onCaricaDisponibilitaPerTipologia,
   onCaricaDisponibilitaPerMedico,
   onCaricaMediciPerTipologia,
+  tuttiMedici,
   mediciTipologia,
   tipologiaVisite,
   onPrenota,
@@ -1077,6 +1110,7 @@ function Prenotazioni({
   onCaricaDisponibilitaPerTipologia: (id: string) => Promise<void>;
   onCaricaDisponibilitaPerMedico: (id: string) => Promise<void>;
   onCaricaMediciPerTipologia: (id: string) => Promise<void>;
+  tuttiMedici: DisponibilitaMedico[] | null;
   mediciTipologia: DisponibilitaMedico[] | null;
   tipologiaVisite: TipologiaVisita[] | null;
   onPrenota: (giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) => void;
@@ -1090,7 +1124,7 @@ function Prenotazioni({
   utenteSelezionato: User | null;
   tipoLista: string;
   sezionePrenotazioni: string;
-  setSezionePrenotazioni: React.Dispatch<React.SetStateAction<"nuovaPrenotazione" | "visualizzaPrenotazioni">>;
+  setSezionePrenotazioni: React.Dispatch<React.SetStateAction<"nuovaPrenotazioneCalendario" | "visualizzaPrenotazioni" | "nuovaPrenotazioneAdmin">>;
   onMostraPrenotazioni: (id: string) => void;
 }>) {
   const [mostraFormFasciaDisponibilita, setMostraFormFasciaDisponibilita] = useState(false);
@@ -1100,12 +1134,44 @@ function Prenotazioni({
   const [tipologiaSelezionataId, setTipologiaSelezionataId] = useState("");
   const [medicoSelezionatoId, setMedicoSelezionatoId] = useState("");
   const { utente, isPaziente, isMedico, isAdmin } = useUtente();
+  const [idDaEliminare, setIdDaEliminare] = useState<string | null>(null);
 
   const titoloCalendario = tipoLista === "Medici" ? `del Dr. ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}` : `di ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}`;
 
   const COLORI_PAZIENTE: Record<string, string> = { mio: "bg-success", prenotabile: "bg-info", pieno: "bg-light" };
   const COLORI_MEDICO: Record<string, string> = { prenotato: "bg-danger", prenotabile: "bg-success", na: "bg-light" };
-  const COLORI_ADMIN_PAZIENTE: Record<string, string> = { mio: "bg-danger", pieno: "bg-light" };
+
+  function gestioneCelle(giorno: Date, ora: number) {
+    let controlloCella: string;
+    let mappaColori: Record<string, string>;
+    if (isPaziente || (isAdmin && tipoLista === "Pazienti")) {
+      controlloCella = statoCellaPaziente(giorno, ora);
+      mappaColori = COLORI_PAZIENTE;
+    } else {
+      // isMedico, oppure isAdmin sui Medici
+      controlloCella = statoCellaMedico(giorno, ora);
+      mappaColori = COLORI_MEDICO;
+    }
+    return { controlloCella, coloreCella: mappaColori[controlloCella] };
+  }
+
+  function datiAzioneCella(giorno: Date, ora: number, giornoDisponibile: boolean, controlloCella: string) {
+    if (isPaziente || (isAdmin && tipoLista === "Pazienti")) return azioneLatoPaziente(giorno, ora, giornoDisponibile, controlloCella);
+    return azioneLatoMedico(giorno, ora, controlloCella);
+  }
+
+  function azioneLatoPaziente(giorno: Date, ora: number, giornoDisponibile: boolean, controlloCella: string) {
+    if (giornoDisponibile && controlloCella === "prenotabile") return { titolo: "Clicca per prenotare", azione: () => onPrenota(giorno, ora, tipologiaSelezionataId, medicoSelezionatoId) };
+    if (giornoDisponibile && controlloCella === "mio") return { titolo: "Clicca per disdire", azione: () => onDisdici(giorno, ora, tipologiaSelezionataId, medicoSelezionatoId) };
+    return { titolo: "", azione: undefined };
+  }
+
+  function azioneLatoMedico(giorno: Date, ora: number, controlloCella: string) {
+    if (controlloCella === "prenotabile") return { titolo: "Clicca per rimuovere disponibilità", azione: () => onClickCasella(giorno, ora) };
+    if (controlloCella === "prenotato") return { titolo: "Clicca per disdire", azione: () => onDisdici(giorno, ora, tipologiaSelezionataId) };
+    if (controlloCella === "na") return { titolo: "Clicca per dare disponibilità", azione: () => onClickCasella(giorno, ora) };
+    return { titolo: "", azione: undefined };
+  }
 
   function formattaData(dataIso: string) {
     const d = new Date(dataIso);
@@ -1115,184 +1181,176 @@ function Prenotazioni({
     };
   }
 
-  function gestioneCelle(giorno: Date, ora: number) {
-    let controlloCella: string;
-    let mappaColori: Record<string, string>;
-    if (isPaziente) {
-      controlloCella = statoCellaPaziente(giorno, ora);
-      mappaColori = COLORI_PAZIENTE;
-    } else if (isAdmin && tipoLista === "Pazienti") {
-      controlloCella = statoCellaPaziente(giorno, ora);
-      mappaColori = COLORI_ADMIN_PAZIENTE;
-    } else {
-      // isMedico, oppure isAdmin sui Medici
-      controlloCella = statoCellaMedico(giorno, ora);
-      mappaColori = COLORI_MEDICO;
-    }
-
-    return { controlloCella, coloreCella: mappaColori[controlloCella] };
-  }
-
-  function datiAzioneCella(giorno: Date, ora: number, giornoDisponibile: boolean, controlloCella: string) {
-    if (isPaziente) {
-      if (giornoDisponibile && controlloCella === "prenotabile") return { titolo: "Clicca per prenotare", azione: () => onPrenota(giorno, ora, tipologiaSelezionataId, medicoSelezionatoId) };
-      if (giornoDisponibile && controlloCella === "mio") return { titolo: "Clicca per disdire", azione: () => onDisdici(giorno, ora, tipologiaSelezionataId, medicoSelezionatoId) };
-    } else {
-      if (controlloCella === "prenotabile" || controlloCella === "na") return { titolo: "Clicca per rendere disponibile", azione: () => onClickCasella(giorno, ora) };
-      if (controlloCella === "prenotato") return { titolo: "Clicca per disdire", azione: () => onDisdici(giorno, ora, tipologiaSelezionataId) };
-    }
-    return { titolo: "", azione: undefined }; // nessuna azione possibile
-  }
-
   const mediciUnici = [...new Map(mediciTipologia?.map((d) => [d.medicoId, d])).values()];
 
+  function suddividiMedici() {
+    if (sezionePrenotazioni === "nuovaPrenotazioneAdmin") {
+      console.log("mediciTipologia: " + mediciTipologia);
+      if (!mediciTipologia) {
+      console.log("tuttiMedici: " + tuttiMedici);
+
+        return tuttiMedici;
+      }
+    } else {
+      const mediciUnici = [...new Map(mediciTipologia?.map((d) => [d.medicoId, d])).values()];
+      return mediciUnici;
+    }
+  }
   return (
     <div className={styles.prenotazioniContainer}>
       <div className="row">
-        {sezionePrenotazioni === "nuovaPrenotazione" && (
-          <div className={`p-3  ${stylesShared.cardBorder}`}>
-            <div className={`card ${styles.projectListTableColor}`}>
-              <div className={`card-header text-white ${styles.titleMedisport}`}>
-                <div className="row">
-                  <div className="col-6">
-                    {isAdmin && <h5 className="m-2">Calendario {titoloCalendario}</h5>}
-                    {!isAdmin && <h5 className="m-2">Calendario prenotazioni</h5>}
-                  </div>
-                  <div className="col-6 d-flex justify-content-end">
-                    {!isPaziente && (
-                      <button className="btn btn-success me-3" onClick={() => setMostraFormFasciaDisponibilita((v) => !v)}>
-                        <i className="bi-plus-lg"></i> Fascia oraria
+        <div className="container">
+          {sezionePrenotazioni === "nuovaPrenotazioneCalendario" && (
+            <div className={`p-3  ${stylesShared.cardBorder}`}>
+              <div className={`card ${styles.projectListTableColor}`}>
+                <div className={`card-header text-white ${styles.titleMedisport}`}>
+                  <div className="row">
+                    <div className="col-6">
+                      {isAdmin && <h5 className="m-2">Calendario {titoloCalendario}</h5>}
+                      {!isAdmin && <h5 className="m-2">Calendario prenotazioni</h5>}
+                    </div>
+                    <div className="col-6 d-flex justify-content-end">
+                      {(isMedico || (isAdmin && tipoLista === "Medici")) && (
+                        <button className="btn btn-success me-3" onClick={() => setMostraFormFasciaDisponibilita((v) => !v)}>
+                          <i className="bi-plus-lg"></i> Fascia oraria
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => {
+                          setTipologiaSelezionataId("");
+                          setMedicoSelezionatoId("");
+                          onMostraPrenotazioni(isAdmin ? (utenteSelezionato?.id.toString() ?? "") : (utente?.id ?? ""));
+                          setSezionePrenotazioni("visualizzaPrenotazioni");
+                        }}
+                      >
+                        Indietro <i className="bi-box-arrow-left"></i>
                       </button>
-                    )}
-                    <button className="btn btn-danger" onClick={() => onMostraPrenotazioni(isAdmin ? (utenteSelezionato?.id.toString() ?? "") : (utente?.id ?? ""))}>
-                      Indietro <i className="bi-box-arrow-left"></i>
-                    </button>
-                    {mostraFormFasciaDisponibilita && (
-                      <div className={`${styles.pannelloDisponibilita} me-4`}>
-                        <div className={`d-flex gap-3 align-items-end p-3 ${stylesShared.cardBorder}`}>
-                          <div>
-                            <label htmlFor="selGiorno" className="form-label text-muted">
-                              Giorno
-                            </label>
-                            <select id="selGiorno" className="form-select" value={giornoGestioneDisponibilita} onChange={(e) => setGiornoGestioneDisponibilita(Number(e.target.value))}>
-                              {GIORNI_SETTIMANA.map((giorno) => (
-                                <option key={giorno.indice} value={giorno.indice}>
-                                  {giorno.nome}
-                                </option>
-                              ))}
-                            </select>
+                      {mostraFormFasciaDisponibilita && (
+                        <div className={`${styles.pannelloDisponibilita} me-4`}>
+                          <div className={`d-flex gap-3 align-items-end p-3 ${stylesShared.cardBorder}`}>
+                            <div>
+                              <label htmlFor="selGiorno" className="form-label text-muted">
+                                Giorno
+                              </label>
+                              <select id="selGiorno" className="form-select" value={giornoGestioneDisponibilita} onChange={(e) => setGiornoGestioneDisponibilita(Number(e.target.value))}>
+                                {GIORNI_SETTIMANA.map((giorno) => (
+                                  <option key={giorno.indice} value={giorno.indice}>
+                                    {giorno.nome}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label htmlFor="selOraInizio" className="form-label text-muted">
+                                Dalle
+                              </label>
+                              <select id="selOraInizio" className="form-select" value={oraInizioGestioneDisponibilita} onChange={(e) => setOraInizioGestioneDisponibilita(Number(e.target.value))}>
+                                {grigliaOre.map((ora) => (
+                                  <option key={ora} value={ora}>
+                                    {ora.toString().padStart(2, "0")}:00
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label htmlFor="selOraFine" className="form-label text-muted">
+                                Alle
+                              </label>
+                              <select id="selOraFine" className="form-select" value={oraFineGestioneDisponibilita} onChange={(e) => setOraFineGestioneDisponibilita(Number(e.target.value))}>
+                                {grigliaOre.map((ora) => (
+                                  <option key={ora} value={ora}>
+                                    {ora.toString().padStart(2, "0")}:00
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-success"
+                              onClick={() => {
+                                onAggiungiFascia(giornoGestioneDisponibilita, oraInizioGestioneDisponibilita, oraFineGestioneDisponibilita);
+                                setMostraFormFasciaDisponibilita(false);
+                              }}
+                            >
+                              <i className="bi-check-lg"></i> Conferma
+                            </button>
                           </div>
-                          <div>
-                            <label htmlFor="selOraInizio" className="form-label text-muted">
-                              Dalle
-                            </label>
-                            <select id="selOraInizio" className="form-select" value={oraInizioGestioneDisponibilita} onChange={(e) => setOraInizioGestioneDisponibilita(Number(e.target.value))}>
-                              {grigliaOre.map((ora) => (
-                                <option key={ora} value={ora}>
-                                  {ora.toString().padStart(2, "0")}:00
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label htmlFor="selOraFine" className="form-label text-muted">
-                              Alle
-                            </label>
-                            <select id="selOraFine" className="form-select" value={oraFineGestioneDisponibilita} onChange={(e) => setOraFineGestioneDisponibilita(Number(e.target.value))}>
-                              {grigliaOre.map((ora) => (
-                                <option key={ora} value={ora}>
-                                  {ora.toString().padStart(2, "0")}:00
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-success"
-                            onClick={() => {
-                              onAggiungiFascia(giornoGestioneDisponibilita, oraInizioGestioneDisponibilita, oraFineGestioneDisponibilita);
-                              setMostraFormFasciaDisponibilita(false);
-                            }}
-                          >
-                            <i className="bi-check-lg"></i> Conferma
-                          </button>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="row">
-                <div className="col-lg-12">
-                  <div className="table-responsive">
-                    {!isPaziente && (
-                      <div className="d-flex align-items-center gap-4 px-3 py-2">
-                        <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la disponibilità</span>
-                        <span className="d-flex align-items-center gap-2">
-                          <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-light`}></span>
-                          <span> Libera</span>
-                        </span>
-                        <span className="d-flex align-items-center gap-2">
-                          <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-success`}></span>
-                          <span>Disponibile </span>
-                        </span>
-                        <span className="d-flex align-items-center gap-2">
-                          <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-danger`}></span>
-                          <span> Visita confermata</span>
-                        </span>
-                      </div>
-                    )}
-                    {isPaziente && (
-                      <div className="d-flex align-items-center gap-4 px-3 py-2">
-                        <span className="text-muted">Clicca su una casella per confermare/disdire la prenotazione:</span>
-                        <span className="d-flex align-items-center gap-2">
-                          <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-info`}></span>
-                          <span> Disponibile</span>
-                        </span>
-                        <span className="d-flex align-items-center gap-2">
-                          <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-success`}></span>
-                          <span>Visita confermata </span>
-                        </span>
-                      </div>
-                    )}
-                    <table className={`table ${styles.tableSpace} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
-                      <thead>
-                        <tr>
-                          <th></th>
-                          {giorniSettimana.map((giorno) => (
-                            <th key={giorno.toISOString()} scope="col" className={`ps-4`}>
-                              {giorno.toLocaleDateString("it-IT", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                year: "numeric",
-                                weekday: "short",
-                              })}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {grigliaOre.map((ora) => (
-                          <tr key={ora}>
-                            <th scope="row">{ora.toString().padStart(2, "0")}:00</th>
-                            {giorniSettimana.map((giorno) => {
-                              const giornoDisponibile = isGiornoDisponibile(giorno, ora);
-                              const { coloreCella, controlloCella } = gestioneCelle(giorno, ora);
-                              const { titolo, azione } = datiAzioneCella(giorno, ora, giornoDisponibile, controlloCella);
-                              return <td title={titolo} key={giorno.toISOString()} className={`${styles.cellStyle} ${coloreCella} ${azione ? styles.cellStylePointer : ""}`} onClick={azione}></td>;
-                            })}
+                <div className="row">
+                  <div className="col-lg-12">
+                    <div className="table-responsive">
+                      {!isPaziente && (
+                        <div className="d-flex align-items-center gap-4 px-3 py-2">
+                          <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la disponibilità</span>
+                          <span className="d-flex align-items-center gap-2">
+                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-light`}></span>
+                            <span> Libera</span>
+                          </span>
+                          <span className="d-flex align-items-center gap-2">
+                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-success`}></span>
+                            <span>Disponibile </span>
+                          </span>
+                          <span className="d-flex align-items-center gap-2">
+                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-danger`}></span>
+                            <span> Visita confermata</span>
+                          </span>
+                        </div>
+                      )}
+                      {isPaziente && (
+                        <div className="d-flex align-items-center gap-4 px-3 py-2">
+                          <span className="text-muted">Clicca su una casella per confermare/disdire la prenotazione:</span>
+                          <span className="d-flex align-items-center gap-2">
+                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-info`}></span>
+                            <span> Disponibile</span>
+                          </span>
+                          <span className="d-flex align-items-center gap-2">
+                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-success`}></span>
+                            <span>Visita confermata </span>
+                          </span>
+                        </div>
+                      )}
+                      <table className={`table ${styles.tableSpace} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
+                        <thead>
+                          <tr>
+                            <th></th>
+                            {giorniSettimana.map((giorno) => (
+                              <th key={giorno.toISOString()} scope="col" className={`ps-4`}>
+                                {giorno.toLocaleDateString("it-IT", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  weekday: "short",
+                                })}
+                              </th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {grigliaOre.map((ora) => (
+                            <tr key={ora}>
+                              <th scope="row">{ora.toString().padStart(2, "0")}:00</th>
+                              {giorniSettimana.map((giorno) => {
+                                const giornoDisponibile = isGiornoDisponibile(giorno, ora);
+                                const { coloreCella, controlloCella } = gestioneCelle(giorno, ora);
+                                const { titolo, azione } = datiAzioneCella(giorno, ora, giornoDisponibile, controlloCella);
+                                return <td title={titolo} key={giorno.toISOString()} className={`${styles.cellStyle} ${coloreCella} ${azione ? styles.cellStylePointer : ""}`} onClick={azione}></td>;
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-        {sezionePrenotazioni === "visualizzaPrenotazioni" && (
-          <div className="container">
+          )}
+          {sezionePrenotazioni === "visualizzaPrenotazioni" && (
             <div className="row">
               <div className="col-8">
                 <div className={`p-3 ${stylesShared.cardBorder}`}>
@@ -1350,7 +1408,8 @@ function Prenotazioni({
                                       <td>
                                         <ul className="list-inline m-0">
                                           <li className="list-inline-item position-relative">
-                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => onDisdiciById(appuntamento.id.toString())}>
+                                            {/* <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => onDisdiciById(appuntamento.id.toString())}> */}
+                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => setIdDaEliminare(appuntamento.id.toString())}>
                                               <i className="bi bi-trash font-size-18"></i>
                                             </button>
                                           </li>
@@ -1386,8 +1445,9 @@ function Prenotazioni({
                             value={tipologiaSelezionataId}
                             onChange={async (e) => {
                               const id = e.target.value;
-                              await onCaricaMediciPerTipologia(id);
                               setTipologiaSelezionataId(id);
+                              setMedicoSelezionatoId("");
+                              onCaricaMediciPerTipologia(id);
                             }}
                           >
                             <option value="" disabled hidden>
@@ -1405,7 +1465,7 @@ function Prenotazioni({
                             Preferisci un professionista?
                           </label>
                           <select
-                            disabled={!mediciTipologia || mediciTipologia.length === 0}
+                            disabled={tipologiaSelezionataId === "" || !mediciTipologia || mediciTipologia.length === 0}
                             id="selOperatore"
                             className="form-select"
                             value={medicoSelezionatoId}
@@ -1437,7 +1497,7 @@ function Prenotazioni({
                               } else {
                                 await Promise.all([onCaricaDisponibilitaPerMedico(medicoSelezionatoId), onCaricaAppuntamentoPerMedico(medicoSelezionatoId)]);
                               }
-                              setSezionePrenotazioni("nuovaPrenotazione");
+                              setSezionePrenotazioni("nuovaPrenotazioneCalendario");
                             }}
                           >
                             PRENOTA
@@ -1450,7 +1510,7 @@ function Prenotazioni({
                         <label htmlFor="selGiorno" className="form-label text-muted">
                           Aggiungi/rimuovi i giorni e le ore di disponibilità
                         </label>
-                        <button className="btn btn-success rounded-pill px-4 fw-bold" onClick={() => setSezionePrenotazioni("nuovaPrenotazione")}>
+                        <button className="btn btn-success rounded-pill px-4 fw-bold" onClick={() => setSezionePrenotazioni("nuovaPrenotazioneCalendario")}>
                           CONTINUA
                         </button>
                       </div>
@@ -1459,9 +1519,118 @@ function Prenotazioni({
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+          {sezionePrenotazioni === "nuovaPrenotazioneAdmin" && (
+            <div className="col-4">
+              <div className={`p-3 ${stylesShared.cardBorder}`}>
+                <div className="card">
+                  <div className={`card-header text-white ${styles.titleMedisport}`}>
+                    <h5 className="m-2">Prenota nuova visita</h5>
+                  </div>
+                  <div className="container">
+                    <div className="row p-3">
+                      <label htmlFor="selGiorno" className="form-label text-muted">
+                        Seleziona la tipologia di servizio
+                      </label>
+                      <select
+                        id="selTipologia"
+                        className="form-select"
+                        value={tipologiaSelezionataId}
+                        onChange={async (e) => {
+                          const id = e.target.value;
+                          setTipologiaSelezionataId(id);
+                          setMedicoSelezionatoId("");
+                          onCaricaMediciPerTipologia(id);
+                        }}
+                      >
+                        <option value="" disabled hidden>
+                          Tutti i servizi
+                        </option>
+                        {tipologiaVisite?.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.descrizione}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="row p-3">
+                      <label htmlFor="selGiorno" className="form-label text-muted">
+                        Professionista
+                      </label>
+                      <select
+                        id="selOperatore"
+                        className="form-select"
+                        value={medicoSelezionatoId}
+                        onChange={(e) => {
+                          setMedicoSelezionatoId(e.target.value);
+                        }}
+                      >
+                        <option value="">Tutti gli operatori</option>
+                        {suddividiMedici().map((m) => (
+                          <option key={m.medicoId} value={m.medicoId}>
+                            {m.medicoNome} {m.medicoCognome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="row p-3">
+                      <label htmlFor="selGiorno" className="form-label text-muted">
+                        Paziente
+                      </label>
+                      <select
+                        id="selPaziente"
+                        className="form-select"
+                        value={medicoSelezionatoId}
+                        onChange={(e) => {
+                          setMedicoSelezionatoId(e.target.value);
+                        }}
+                      >
+                        <option value="">Tutti i pazienti</option>
+                        {mediciUnici.map((m) => (
+                          <option key={m.medicoId} value={m.medicoId}>
+                            {m.medicoNome} {m.medicoCognome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="row p-3">
+                      {mediciUnici?.length === 0 && (
+                        <label htmlFor="selGiorno" className="form-label text-muted">
+                          {" "}
+                          Nessun medico disponibile
+                        </label>
+                      )}
+                      <button
+                        disabled={tipologiaSelezionataId === "" || !mediciTipologia || mediciTipologia.length === 0}
+                        className="btn btn-success rounded-pill px-4 fw-bold"
+                        onClick={async () => {
+                          if (medicoSelezionatoId === "") {
+                            await Promise.all([onCaricaDisponibilitaPerTipologia(tipologiaSelezionataId), onCaricaAppuntamentoPerTipologia(tipologiaSelezionataId)]);
+                          } else {
+                            await Promise.all([onCaricaDisponibilitaPerMedico(medicoSelezionatoId), onCaricaAppuntamentoPerMedico(medicoSelezionatoId)]);
+                          }
+                          setSezionePrenotazioni("nuovaPrenotazioneCalendario");
+                        }}
+                      >
+                        PRENOTA
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+      <ConfermaEliminazione
+        mostra={idDaEliminare !== null}
+        messaggio="Sei sicuro di voler eliminare questo elemento?"
+        onConferma={() => {
+          if (idDaEliminare) onDisdiciById(idDaEliminare); // la tua vera cancellazione
+          setIdDaEliminare(null); // chiudi il modale
+        }}
+        onAnnulla={() => setIdDaEliminare(null)}
+      />
     </div>
   );
 }
