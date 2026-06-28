@@ -42,7 +42,6 @@ namespace IntelliMedi.API.Controllers
                 PazienteNome = a.Paziente.Nome,
                 PazienteCognome = a.Paziente.Cognome,
                 TipologiaVisita = a.TipologiaVisita.Descrizione,
-                Descrizione = a.Descrizione,
             })
             .ToListAsync();
         }
@@ -66,8 +65,6 @@ namespace IntelliMedi.API.Controllers
                 PazienteNome = a.Paziente.Nome,
                 PazienteCognome = a.Paziente.Cognome,
                 TipologiaVisita = a.TipologiaVisita.Descrizione,
-                Descrizione = a.Descrizione,
-
             })
             .ToListAsync();
         }
@@ -90,8 +87,6 @@ namespace IntelliMedi.API.Controllers
                 MedicoNome = a.Medico.Nome,
                 MedicoCognome = a.Medico.Cognome,
                 TipologiaVisita = a.TipologiaVisita.Descrizione,
-                Descrizione = a.Descrizione,
-
             })
             .ToListAsync();
         }
@@ -119,14 +114,12 @@ namespace IntelliMedi.API.Controllers
             //se il paziente ha già un appuntamento in quella data e ora
             if (await _context.Appuntamenti.AnyAsync(d => d.PazienteId == registrazione.PazienteId && d.Data == registrazione.Data))
                 return Conflict("Esiste già un appuntamento in questa data e ora");
-
             Appuntamento appuntamento = new Appuntamento()
             {
                 Data = registrazione.Data,
                 TipologiaVisitaId = registrazione.TipologiaVisitaId,
                 PazienteId = registrazione.PazienteId,
                 MedicoId = registrazione.MedicoId,
-                Descrizione = registrazione.Descrizione
             };
 
             _context.Appuntamenti.Add(appuntamento);
@@ -144,11 +137,10 @@ namespace IntelliMedi.API.Controllers
             if (existingAppuntamento == null)
                 return NotFound();
 
-            existingAppuntamento.Descrizione = appuntamento.Descrizione;
             existingAppuntamento.PazienteId = appuntamento.PazienteId;
             existingAppuntamento.Paziente = appuntamento.Paziente;
             existingAppuntamento.MedicoId = appuntamento.MedicoId;
-            existingAppuntamento.Medico = appuntamento.Medico;
+            //existingAppuntamento.Medico = appuntamento.Medico;
             existingAppuntamento.TipologiaVisitaId = appuntamento.TipologiaVisitaId;
             existingAppuntamento.TipologiaVisita = appuntamento.TipologiaVisita;
 

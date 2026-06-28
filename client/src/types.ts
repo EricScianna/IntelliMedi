@@ -22,6 +22,7 @@ export interface DisponibilitaMedico {
   medicoId: number;
   medicoNome: string;
   medicoCognome: string;
+  tipologiaVisitaId: string;
   giorno: number;
   oraInizio: string;
   oraFine: string;
@@ -38,5 +39,4 @@ export interface Appuntamento {
   pazienteNome: string;
   pazienteCognome: string;  
   tipologiaVisita: string;
-  descrizione?: string;
 }

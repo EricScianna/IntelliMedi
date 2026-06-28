@@ -63,10 +63,23 @@ namespace IntelliMedi.API.Controllers
             .ToListAsync();
         }
 
+        //restituisce tutti i medici che hanno disponibilità
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetAll()
+        public async Task<ActionResult<IEnumerable<DisponibilitaMedicoResponse>>> GetAll()
         {
-            return await _context.DisponibilitaMedici.ToListAsync();
+            return await _context.DisponibilitaMedici
+                .Select(a => new DisponibilitaMedicoResponse
+                {
+                    Id = a.Id,
+                    MedicoId = a.MedicoId,
+                    MedicoNome = a.Medico.Nome,
+                    MedicoCognome = a.Medico.Cognome,
+                    TipologiaVisitaId = a.Medico.TipologiaVisite.Select(t => t.Id).FirstOrDefault(),
+                    Giorno = a.Giorno,
+                    OraInizio = a.OraInizio,
+                    OraFine = a.OraFine,
+                })
+                .ToListAsync();
         }
 
         [HttpGet("{Id}")]

@@ -6,6 +6,7 @@
         public int MedicoId { get; set; }
         public string MedicoNome { get; set; }
         public string MedicoCognome { get; set; }
+        public int TipologiaVisitaId { get; set; }
         public DayOfWeek Giorno { get; set; }
         public TimeOnly OraInizio { get; set; }
         public TimeOnly OraFine { get; set; }

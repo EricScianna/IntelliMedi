@@ -73,8 +73,11 @@ function AreaPersonale() {
   // Stati per la gestione delle prenotazioni
   const [disponibilitaMedico, setDisponibilitaMedico] = useState<DisponibilitaMedico[] | null>(null);
   const [tuttiMedici, setTuttiMedici] = useState<DisponibilitaMedico[] | null>(null);
+  const [tuttiPazienti, setTuttiPazienti] = useState<User[] | null>(null);
+  const [pazienteSelezionatoId, setPazienteSelezionatoId] = useState("");
   const [mediciTipologia, setMediciTipologia] = useState<DisponibilitaMedico[] | null>(null);
   const [appuntamenti, setAppuntamenti] = useState<Appuntamento[] | null>(null);
+  const [isNuovaPrenotazioneAdmin, setNuovaPrenotazioneAdmin] = useState<boolean>(false);
   const [lunediCorrente, setLunediCorrente] = useState<Date>(() => {
     const oggi = new Date();
     const g = oggi.getDay();
@@ -122,7 +125,15 @@ function AreaPersonale() {
     ],
   };
 
-  const idUtente = ruolo === "Amministratore" ? utenteSelezionato?.id.toString() : utente?.id;
+  //const idUtente = isNuovaPrenotazioneAdmin ? pazienteSelezionatoId : ruolo === "Amministratore" ? utenteSelezionato?.id.toString() : utente?.id;
+  //const idUtente = ruolo === "Amministratore" ? utenteSelezionato?.id.toString() : utente?.id;
+  function calcolaIdUtente() {
+    if (isNuovaPrenotazioneAdmin) return pazienteSelezionatoId;
+    if (ruolo === "Amministratore") return utenteSelezionato?.id.toString();
+    return utente?.id;
+  }
+  const idUtente = calcolaIdUtente();
+
   const vociSidebar = vociPerRuolo[ruolo] ?? [];
   const colClass = vociSidebar.length > 3 ? "col-5 g-5" : "col-3";
   const nomeVisualizzato = ruolo === "Amministratore" ? "Amministratore" : `${user?.nome} ${user?.cognome}`;
@@ -139,11 +150,11 @@ function AreaPersonale() {
     return headers;
   }, []);
 
-  function nuovaPrenotazioneAdmin() {
+  async function nuovaPrenotazioneAdmin() {
+    setPazienteSelezionatoId("");
     setTipoLista(""); // reset, per pulizia
     setUtenteSelezionato(null); // niente utente "vecchio"
-    caricaListaTipologiaVisita(); // i dati che serviranno
-    caricaTuttiMedici();
+    await Promise.all([caricaListaTipologiaVisita(), caricaTuttiMedici(), caricaTuttiPazienti()]);
     setSezionePrenotazioni("nuovaPrenotazioneAdmin");
     setSezioneContent("prenotazioni");
   }
@@ -220,16 +231,6 @@ function AreaPersonale() {
   }
 
   async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) {
-    const { mediciDisponibiliId, appuntamentiCella } = datiCella(giorno, oraAppuntamento);
-    //estrae gli id dei medici occupati
-    const mediciOccupati = appuntamentiCella?.map((x) => x.medicoId);
-    //controlla se ne esiste almeno uno che NON (!) è incluso
-    const medicoId = mediciDisponibiliId.find((m) => !mediciOccupati.includes(m));
-    if (!medicoId) {
-      setErrore("Nessun medico disponibile");
-      return false;
-    }
-
     const nuovaData = new Date(giorno);
     nuovaData.setHours(oraAppuntamento, 0, 0, 0);
     const dataFormattata =
@@ -241,10 +242,29 @@ function AreaPersonale() {
       "T" +
       nuovaData.getHours().toString().padStart(2, "0") +
       ":00:00";
+
+    const medicoScelto = tuttiMedici?.find((m) => m.medicoId === Number(medicoSelezionatoId));
+    const tipologiaId = tipologiaSelezionataId ? Number(tipologiaSelezionataId) : medicoScelto?.tipologiaVisitaId;
+
+    if (!tipologiaId) {
+      setErrore("Seleziona un servizio o un medico");
+      return false;
+    }
+
+    const { mediciDisponibiliId, appuntamentiCella } = datiCella(giorno, oraAppuntamento);
+    //estrae gli id dei medici occupati
+    const mediciOccupati = appuntamentiCella?.map((x) => x.medicoId);
+    //controlla se ne esiste almeno uno che NON (!) è incluso
+    const medicoId = mediciDisponibiliId.find((m) => !mediciOccupati.includes(m));
+    if (!medicoId) {
+      setErrore("Nessun medico disponibile");
+      return false;
+    }
+
     const risposta = await fetch(`${API_URL}/api/Appuntamenti`, {
       method: "POST",
       headers: createHeaders(true),
-      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: Number(tipologiaSelezionataId), PazienteId: Number(idUtente), medicoId, descrizione: medicoSelezionatoId }),
+      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: tipologiaId, PazienteId: Number(idUtente), medicoId }),
     });
 
     if (risposta.ok) {
@@ -381,7 +401,7 @@ function AreaPersonale() {
       }) ?? [];
 
     const appuntamentoPersonale = appuntamentiCella.find((x) => {
-      if (isPaziente) return x.pazienteId === Number(idUtente);
+      if (isPaziente || isNuovaPrenotazioneAdmin) return x.pazienteId === Number(idUtente);
       if (isMedico) return x.medicoId === Number(idUtente);
       if (isAdmin && tipoLista === "Pazienti") return x.pazienteId === Number(idUtente);
       if (isAdmin && tipoLista === "Medici") return x.medicoId === Number(idUtente);
@@ -391,7 +411,7 @@ function AreaPersonale() {
     if (appuntamentoPersonale) {
       const risposta = await deleteGenerico("Appuntamenti/" + appuntamentoPersonale.id.toString());
       if (risposta) {
-        if (isPaziente || (isAdmin && tipoLista === "Pazienti")) {
+        if (isPaziente || (isAdmin && tipoLista === "Pazienti") || isNuovaPrenotazioneAdmin) {
           if (medicoSelezionatoId === "") {
             return caricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
           } else {
@@ -400,7 +420,7 @@ function AreaPersonale() {
         }
       }
 
-      if (isMedico) caricaAppuntamentoPerMedico(utente?.id ?? "");
+      if (isMedico) caricaAppuntamentoPerMedico(idUtente ?? "");
       if (isAdmin) caricaAppuntamentoPerMedico(idUtente ?? "");
     }
   }
@@ -432,6 +452,11 @@ function AreaPersonale() {
     const dati = await getGenerico(`DisponibilitaMedico`);
     setTuttiMedici(dati);
   }
+  //chiamato dall'admin quando crea nuova prenotazione
+  async function caricaTuttiPazienti() {
+    const dati = await getGenerico("Pazienti");
+    setTuttiPazienti(dati);
+  }
   //chiamato dal paziente quando fa la ricerca per tipologia
   async function caricaAppuntamentoPerTipologia(id: string) {
     const dati = await getGenerico(`Appuntamenti/GetByTipologia?tipologiaId=${id}`);
@@ -442,7 +467,7 @@ function AreaPersonale() {
     const dati = await getGenerico(`Appuntamenti/GetByMedico?medicoId=${id}`);
     setAppuntamenti(dati);
   }
-  //chiamato dal medico quando fa la ricerca per medicoId
+  //chiamato dal paziente quando fa la ricerca
   async function caricaAppuntamentoPerPaziente(id: string) {
     const dati = await getGenerico(`Appuntamenti/GetByPaziente?pazienteId=${id}`);
     setAppuntamenti(dati);
@@ -451,11 +476,17 @@ function AreaPersonale() {
   async function mostraPrenotazioni(id: string) {
     if (isPaziente || (isAdmin && tipoLista === "Pazienti")) {
       await Promise.all([caricaAppuntamentoPerPaziente(id), caricaListaTipologiaVisita()]);
+      setSezionePrenotazioni("visualizzaPrenotazioni");
     }
     if (isMedico || (isAdmin && tipoLista === "Medici")) {
       await Promise.all([caricaDisponibilitaPerMedico(id), caricaAppuntamentoPerMedico(id)]);
+      setSezionePrenotazioni("visualizzaPrenotazioni");
     }
-    setSezionePrenotazioni("visualizzaPrenotazioni");
+    if (isNuovaPrenotazioneAdmin) {
+      console.log("idUtente" + idUtente);
+      await Promise.all([caricaAppuntamentoPerPaziente(idUtente ?? ""), caricaListaTipologiaVisita()]);
+      setSezionePrenotazioni("nuovaPrenotazioneAdmin");
+    }
     setSezioneContent("prenotazioni");
   }
 
@@ -474,7 +505,8 @@ function AreaPersonale() {
   function statoCellaPaziente(giorno: Date, ora: number): "mio" | "prenotabile" | "pieno" {
     const { mediciDisponibiliId, appuntamentiCella } = datiCella(giorno, ora);
     //controlla se negli appuntamenti c'è l'id paziente (some restituisce boolean)
-    const mio = appuntamentiCella.some((x) => x.pazienteId === (isPaziente ? Number(utente?.id) : Number(utenteSelezionato?.id)));
+    //const mio = appuntamentiCella.some((x) => x.pazienteId === (isPaziente ? Number(utente?.id) : Number(utenteSelezionato?.id)));
+    const mio = appuntamentiCella.some((x) => x.pazienteId === Number(idUtente));
     //estrae gli id dei medici occupati
     const mediciOccupati = appuntamentiCella?.map((x) => x.medicoId);
     //controlla se ne esiste almeno uno che NON (!) è incluso
@@ -497,7 +529,6 @@ function AreaPersonale() {
 
   async function gestisciCella(giorno: Date, ora: number) {
     let ok;
-    console.log("quiz");
     const giornoDisponibile = oreDisponibiliDelGiorno(giorno.getDay()).includes(ora);
     if (giornoDisponibile) {
       const cella = disponibilitaMedico?.find((d) => d.giorno === giorno.getDay() && Number.parseInt(d.oraInizio) === ora);
@@ -640,6 +671,7 @@ function AreaPersonale() {
                 onCaricaDisponibilitaPerTipologia={caricaDisponibilitaPerTipologia}
                 onCaricaDisponibilitaPerMedico={caricaDisponibilitaPerMedico}
                 tuttiMedici={tuttiMedici}
+                tuttiPazienti={tuttiPazienti}
                 onCaricaMediciPerTipologia={caricaMediciPerTipologia}
                 mediciTipologia={mediciTipologia}
                 tipologiaVisite={tipologiaVisite}
@@ -651,11 +683,15 @@ function AreaPersonale() {
                 statoCellaPaziente={(giorno, ora) => statoCellaPaziente(giorno, ora)}
                 statoCellaMedico={(giorno, ora) => statoCellaMedico(giorno, ora)}
                 utenteSelezionato={utenteSelezionato}
+                pazienteSelezionatoId={pazienteSelezionatoId}
+                setPazienteSelezionatoId={setPazienteSelezionatoId}
                 tipoLista={tipoLista}
                 appuntamenti={appuntamenti}
                 setSezionePrenotazioni={setSezionePrenotazioni}
                 sezionePrenotazioni={sezionePrenotazioni}
                 onMostraPrenotazioni={mostraPrenotazioni}
+                isNuovaPrenotazioneAdmin={isNuovaPrenotazioneAdmin}
+                setNuovaPrenotazioneAdmin={setNuovaPrenotazioneAdmin}
               ></Prenotazioni>
             )}
           </div>
@@ -1086,6 +1122,7 @@ function Prenotazioni({
   onCaricaDisponibilitaPerMedico,
   onCaricaMediciPerTipologia,
   tuttiMedici,
+  tuttiPazienti,
   mediciTipologia,
   tipologiaVisite,
   onPrenota,
@@ -1097,10 +1134,14 @@ function Prenotazioni({
   statoCellaPaziente,
   statoCellaMedico,
   utenteSelezionato,
+  pazienteSelezionatoId,
+  setPazienteSelezionatoId,
   tipoLista,
   sezionePrenotazioni,
   setSezionePrenotazioni,
   onMostraPrenotazioni,
+  isNuovaPrenotazioneAdmin,
+  setNuovaPrenotazioneAdmin,
 }: Readonly<{
   onAggiungiFascia: (giorno: number, oraInizio: number, oraFine: number) => void;
   giorniSettimana: Date[];
@@ -1111,6 +1152,7 @@ function Prenotazioni({
   onCaricaDisponibilitaPerMedico: (id: string) => Promise<void>;
   onCaricaMediciPerTipologia: (id: string) => Promise<void>;
   tuttiMedici: DisponibilitaMedico[] | null;
+  tuttiPazienti: User[] | null;
   mediciTipologia: DisponibilitaMedico[] | null;
   tipologiaVisite: TipologiaVisita[] | null;
   onPrenota: (giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) => void;
@@ -1122,10 +1164,14 @@ function Prenotazioni({
   statoCellaPaziente: (giorno: Date, ora: number) => string;
   statoCellaMedico: (giorno: Date, ora: number) => string;
   utenteSelezionato: User | null;
+  pazienteSelezionatoId: string;
+  setPazienteSelezionatoId: React.Dispatch<React.SetStateAction<string>>;
   tipoLista: string;
   sezionePrenotazioni: string;
   setSezionePrenotazioni: React.Dispatch<React.SetStateAction<"nuovaPrenotazioneCalendario" | "visualizzaPrenotazioni" | "nuovaPrenotazioneAdmin">>;
   onMostraPrenotazioni: (id: string) => void;
+  isNuovaPrenotazioneAdmin: boolean;
+  setNuovaPrenotazioneAdmin: React.Dispatch<React.SetStateAction<boolean>>;
 }>) {
   const [mostraFormFasciaDisponibilita, setMostraFormFasciaDisponibilita] = useState(false);
   const [giornoGestioneDisponibilita, setGiornoGestioneDisponibilita] = useState(1);
@@ -1139,12 +1185,12 @@ function Prenotazioni({
   const titoloCalendario = tipoLista === "Medici" ? `del Dr. ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}` : `di ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}`;
 
   const COLORI_PAZIENTE: Record<string, string> = { mio: "bg-success", prenotabile: "bg-info", pieno: "bg-light" };
-  const COLORI_MEDICO: Record<string, string> = { prenotato: "bg-danger", prenotabile: "bg-success", na: "bg-light" };
+  const COLORI_MEDICO: Record<string, string> = { prenotato: "bg-success", prenotabile: "bg-info", na: "bg-light" };
 
   function gestioneCelle(giorno: Date, ora: number) {
     let controlloCella: string;
     let mappaColori: Record<string, string>;
-    if (isPaziente || (isAdmin && tipoLista === "Pazienti")) {
+    if (isPaziente || (isAdmin && tipoLista === "Pazienti") || (isAdmin && isNuovaPrenotazioneAdmin)) {
       controlloCella = statoCellaPaziente(giorno, ora);
       mappaColori = COLORI_PAZIENTE;
     } else {
@@ -1156,7 +1202,7 @@ function Prenotazioni({
   }
 
   function datiAzioneCella(giorno: Date, ora: number, giornoDisponibile: boolean, controlloCella: string) {
-    if (isPaziente || (isAdmin && tipoLista === "Pazienti")) return azioneLatoPaziente(giorno, ora, giornoDisponibile, controlloCella);
+    if (isPaziente || (isAdmin && tipoLista === "Pazienti") || (isAdmin && isNuovaPrenotazioneAdmin)) return azioneLatoPaziente(giorno, ora, giornoDisponibile, controlloCella);
     return azioneLatoMedico(giorno, ora, controlloCella);
   }
 
@@ -1181,21 +1227,11 @@ function Prenotazioni({
     };
   }
 
-  const mediciUnici = [...new Map(mediciTipologia?.map((d) => [d.medicoId, d])).values()];
-
   function suddividiMedici() {
-    if (sezionePrenotazioni === "nuovaPrenotazioneAdmin") {
-      console.log("mediciTipologia: " + mediciTipologia);
-      if (!mediciTipologia) {
-      console.log("tuttiMedici: " + tuttiMedici);
-
-        return tuttiMedici;
-      }
-    } else {
-      const mediciUnici = [...new Map(mediciTipologia?.map((d) => [d.medicoId, d])).values()];
-      return mediciUnici;
-    }
+    const fonte = sezionePrenotazioni === "nuovaPrenotazioneAdmin" && tipologiaSelezionataId === "" ? tuttiMedici : mediciTipologia;
+    return [...new Map(fonte?.map((d) => [d.medicoId, d])).values()];
   }
+
   return (
     <div className={styles.prenotazioniContainer}>
       <div className="row">
@@ -1206,8 +1242,8 @@ function Prenotazioni({
                 <div className={`card-header text-white ${styles.titleMedisport}`}>
                   <div className="row">
                     <div className="col-6">
-                      {isAdmin && <h5 className="m-2">Calendario {titoloCalendario}</h5>}
-                      {!isAdmin && <h5 className="m-2">Calendario prenotazioni</h5>}
+                      {isAdmin && !isNuovaPrenotazioneAdmin && <h5 className="m-2">Calendario {titoloCalendario}</h5>}
+                      {(!isAdmin || (isAdmin && isNuovaPrenotazioneAdmin)) && <h5 className="m-2">Calendario prenotazioni</h5>}
                     </div>
                     <div className="col-6 d-flex justify-content-end">
                       {(isMedico || (isAdmin && tipoLista === "Medici")) && (
@@ -1221,7 +1257,7 @@ function Prenotazioni({
                           setTipologiaSelezionataId("");
                           setMedicoSelezionatoId("");
                           onMostraPrenotazioni(isAdmin ? (utenteSelezionato?.id.toString() ?? "") : (utente?.id ?? ""));
-                          setSezionePrenotazioni("visualizzaPrenotazioni");
+                          // setSezionePrenotazioni(isNuovaPrenotazioneAdmin ? "nuovaPrenotazioneAdmin" : "visualizzaPrenotazioni");
                         }}
                       >
                         Indietro <i className="bi-box-arrow-left"></i>
@@ -1284,36 +1320,26 @@ function Prenotazioni({
                 <div className="row">
                   <div className="col-lg-12">
                     <div className="table-responsive">
-                      {!isPaziente && (
-                        <div className="d-flex align-items-center gap-4 px-3 py-2">
-                          <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la disponibilità</span>
-                          <span className="d-flex align-items-center gap-2">
-                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-light`}></span>
-                            <span> Libera</span>
-                          </span>
-                          <span className="d-flex align-items-center gap-2">
-                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-success`}></span>
-                            <span>Disponibile </span>
-                          </span>
-                          <span className="d-flex align-items-center gap-2">
-                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-danger`}></span>
-                            <span> Visita confermata</span>
-                          </span>
-                        </div>
-                      )}
-                      {isPaziente && (
-                        <div className="d-flex align-items-center gap-4 px-3 py-2">
-                          <span className="text-muted">Clicca su una casella per confermare/disdire la prenotazione:</span>
-                          <span className="d-flex align-items-center gap-2">
-                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-info`}></span>
-                            <span> Disponibile</span>
-                          </span>
-                          <span className="d-flex align-items-center gap-2">
-                            <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-success`}></span>
-                            <span>Visita confermata </span>
-                          </span>
-                        </div>
-                      )}
+                      <div className="d-flex align-items-center gap-4 px-3 py-2">
+                        {!isPaziente && !isNuovaPrenotazioneAdmin && tipoLista === "Medici" &&(
+                          <>
+                            <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la disponibilità</span>
+                            <span className="d-flex align-items-center gap-2">
+                              <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-light`}></span>
+                              <span> Libera</span>
+                            </span>
+                          </>
+                        )}
+                        {(isPaziente || (isAdmin && isNuovaPrenotazioneAdmin) || tipoLista === "Pazienti") && <span className="text-muted">Clicca su una casella per confermare/disdire la prenotazione:</span>}
+                        <span className="d-flex align-items-center gap-2">
+                          <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-info`}></span>
+                          <span>Disponibile </span>
+                        </span>
+                        <span className="d-flex align-items-center gap-2">
+                          <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-success`}></span>
+                          <span> Visita confermata</span>
+                        </span>
+                      </div>
                       <table className={`table ${styles.tableSpace} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
                         <thead>
                           <tr>
@@ -1474,7 +1500,7 @@ function Prenotazioni({
                             }}
                           >
                             <option value="">Tutti gli operatori</option>
-                            {mediciUnici.map((m) => (
+                            {suddividiMedici().map((m) => (
                               <option key={m.medicoId} value={m.medicoId}>
                                 {m.medicoNome} {m.medicoCognome}
                               </option>
@@ -1482,9 +1508,8 @@ function Prenotazioni({
                           </select>
                         </div>
                         <div className="row p-3">
-                          {mediciUnici?.length === 0 && (
+                          {suddividiMedici().length === 0 && (
                             <label htmlFor="selGiorno" className="form-label text-muted">
-                              {" "}
                               Nessun medico disponibile
                             </label>
                           )}
@@ -1497,6 +1522,7 @@ function Prenotazioni({
                               } else {
                                 await Promise.all([onCaricaDisponibilitaPerMedico(medicoSelezionatoId), onCaricaAppuntamentoPerMedico(medicoSelezionatoId)]);
                               }
+                              setNuovaPrenotazioneAdmin(false);
                               setSezionePrenotazioni("nuovaPrenotazioneCalendario");
                             }}
                           >
@@ -1510,7 +1536,13 @@ function Prenotazioni({
                         <label htmlFor="selGiorno" className="form-label text-muted">
                           Aggiungi/rimuovi i giorni e le ore di disponibilità
                         </label>
-                        <button className="btn btn-success rounded-pill px-4 fw-bold" onClick={() => setSezionePrenotazioni("nuovaPrenotazioneCalendario")}>
+                        <button
+                          className="btn btn-success rounded-pill px-4 fw-bold"
+                          onClick={() => {
+                            setNuovaPrenotazioneAdmin(false);
+                            setSezionePrenotazioni("nuovaPrenotazioneCalendario");
+                          }}
+                        >
                           CONTINUA
                         </button>
                       </div>
@@ -1540,12 +1572,12 @@ function Prenotazioni({
                           const id = e.target.value;
                           setTipologiaSelezionataId(id);
                           setMedicoSelezionatoId("");
-                          onCaricaMediciPerTipologia(id);
+                          if (Number(id) > 0) {
+                            onCaricaMediciPerTipologia(id);
+                          }
                         }}
                       >
-                        <option value="" disabled hidden>
-                          Tutti i servizi
-                        </option>
+                        <option value="">Tutti i servizi</option>
                         {tipologiaVisite?.map((t) => (
                           <option key={t.id} value={t.id}>
                             {t.descrizione}
@@ -1558,6 +1590,7 @@ function Prenotazioni({
                         Professionista
                       </label>
                       <select
+                        disabled={tipologiaSelezionataId !== "" && (!mediciTipologia || mediciTipologia.length === 0)}
                         id="selOperatore"
                         className="form-select"
                         value={medicoSelezionatoId}
@@ -1565,7 +1598,9 @@ function Prenotazioni({
                           setMedicoSelezionatoId(e.target.value);
                         }}
                       >
-                        <option value="">Tutti gli operatori</option>
+                        <option value="" hidden={tipologiaSelezionataId === ""}>
+                          Tutti gli operatori
+                        </option>
                         {suddividiMedici().map((m) => (
                           <option key={m.medicoId} value={m.medicoId}>
                             {m.medicoNome} {m.medicoCognome}
@@ -1578,30 +1613,36 @@ function Prenotazioni({
                         Paziente
                       </label>
                       <select
+                        disabled={tipologiaSelezionataId !== "" && (!mediciTipologia || mediciTipologia.length === 0)}
                         id="selPaziente"
                         className="form-select"
-                        value={medicoSelezionatoId}
+                        value={pazienteSelezionatoId}
                         onChange={(e) => {
-                          setMedicoSelezionatoId(e.target.value);
+                          setPazienteSelezionatoId(e.target.value);
                         }}
                       >
-                        <option value="">Tutti i pazienti</option>
-                        {mediciUnici.map((m) => (
-                          <option key={m.medicoId} value={m.medicoId}>
-                            {m.medicoNome} {m.medicoCognome}
+                        <option value="" disabled hidden>
+                          Tutti i pazienti
+                        </option>
+                        {tuttiPazienti?.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nome} {p.cognome}
                           </option>
                         ))}
                       </select>
                     </div>
                     <div className="row p-3">
-                      {mediciUnici?.length === 0 && (
+                      {suddividiMedici()?.length === 0 && (
                         <label htmlFor="selGiorno" className="form-label text-muted">
-                          {" "}
                           Nessun medico disponibile
                         </label>
                       )}
                       <button
-                        disabled={tipologiaSelezionataId === "" || !mediciTipologia || mediciTipologia.length === 0}
+                        disabled={
+                          (tipologiaSelezionataId !== "" && (!mediciTipologia || mediciTipologia.length === 0)) ||
+                          (tipologiaSelezionataId === "" && medicoSelezionatoId === "") ||
+                          pazienteSelezionatoId === ""
+                        }
                         className="btn btn-success rounded-pill px-4 fw-bold"
                         onClick={async () => {
                           if (medicoSelezionatoId === "") {
@@ -1609,6 +1650,7 @@ function Prenotazioni({
                           } else {
                             await Promise.all([onCaricaDisponibilitaPerMedico(medicoSelezionatoId), onCaricaAppuntamentoPerMedico(medicoSelezionatoId)]);
                           }
+                          setNuovaPrenotazioneAdmin(true);
                           setSezionePrenotazioni("nuovaPrenotazioneCalendario");
                         }}
                       >

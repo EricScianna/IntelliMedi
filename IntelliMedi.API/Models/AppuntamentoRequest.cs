@@ -6,6 +6,5 @@
         public int TipologiaVisitaId { get; set; }
         public int PazienteId { get; set; }
         public int MedicoId { get; set; }
-        public string? Descrizione { get; set; }
     }
 }
