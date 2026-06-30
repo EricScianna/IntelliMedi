@@ -9,11 +9,16 @@
 .imageBackground {
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-
 }
 
-@media (max-width: 991.98px) {
+@media (max-width: 992px) {
   .cascadingRight {
-    margin-right: 0;
+    margin-right: -100px;
+  }
+}
+
+@media (max-width: 576px) {
+  .cascadingRight {
+    margin-right: -150px;
   }
 }

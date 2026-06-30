@@ -62,7 +62,7 @@ function FormDatiUtente({
           </div>
           <div className="col-md-4 mb-4">
             <div className="form-floating">
-              <input type="text" id="CodiceFiscale" className="form-control" value={form.codiceFiscale} onChange={(e) => setForm({ ...form, codiceFiscale: e.target.value })} />
+              <input type="text" id="CodiceFiscale" className="form-control" value={form.codiceFiscale} onChange={(e) => setForm({ ...form, codiceFiscale: e.target.value })} required/>
               <label htmlFor="CodiceFiscale">Codice fiscale</label>
             </div>
           </div>

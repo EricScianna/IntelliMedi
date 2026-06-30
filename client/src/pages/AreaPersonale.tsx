@@ -111,9 +111,27 @@ function AreaPersonale() {
 
   const vociPerRuolo: Record<string, VoceMenu[]> = {
     Amministratore: [
-      { etichetta: "Nuova Prenotazione", descrizione: "Crea nuova prenotazione", immagine: "bi-calendar", link: nuovaPrenotazioneAdmin },
-      { etichetta: "Pazienti", descrizione: "Visualizza e gestisci i pazienti del sistema", immagine: "bi-people", link: () => mostraListaUtenti("Pazienti") },
-      { etichetta: "Medici", descrizione: "Visualizza e gestisci i medici del sistema", immagine: "bi-heart-pulse", link: () => mostraListaUtenti("Medici") },
+      {
+        etichetta: "Nuova Prenotazione",
+        descrizione: "Crea nuova prenotazione",
+        immagine: "bi-calendar",
+        link: () => {
+          setNuovaPrenotazioneAdmin(true);
+          nuovaPrenotazioneAdmin();
+        },
+      },
+      {
+        etichetta: "Pazienti",
+        descrizione: "Visualizza e gestisci i pazienti del sistema",
+        immagine: "bi-people",
+        link: () => mostraListaUtenti("Pazienti"),
+      },
+      {
+        etichetta: "Medici",
+        descrizione: "Visualizza e gestisci i medici del sistema",
+        immagine: "bi-heart-pulse",
+        link: () => mostraListaUtenti("Medici"),
+      },
     ],
     Paziente: [
       { etichetta: "Anagrafica", descrizione: "Visualizza e modifica i tuoi dati personali", immagine: "bi-person", link: mostraAnagrafica },
@@ -151,6 +169,8 @@ function AreaPersonale() {
   }, []);
 
   async function nuovaPrenotazioneAdmin() {
+    setAppuntamenti([]);
+    setNuovaPrenotazioneAdmin(true);
     setPazienteSelezionatoId("");
     setTipoLista(""); // reset, per pulizia
     setUtenteSelezionato(null); // niente utente "vecchio"
@@ -357,6 +377,7 @@ function AreaPersonale() {
 
   async function mostraListaUtenti(tipoUtente: string) {
     const dati = await getGenerico(`${tipoUtente}`);
+    setNuovaPrenotazioneAdmin(false);
     setUsers(dati);
     setIndicePagina(1);
     setSezioneContent("listaUtenti");
@@ -426,11 +447,12 @@ function AreaPersonale() {
   }
 
   async function cancellaAppuntamentoById(id: string) {
-    await deleteGenerico("Appuntamenti/" + id.toString());
-    if (isPaziente) await caricaAppuntamentoPerPaziente(utente?.id ?? "");
-    if (isMedico) await caricaAppuntamentoPerMedico(utente?.id ?? "");
-    if (isAdmin && tipoLista === "Pazienti") await caricaAppuntamentoPerPaziente(idUtente ?? "");
-    if (isAdmin && tipoLista === "Medici") await caricaAppuntamentoPerMedico(idUtente ?? "");
+    await deleteGenerico("Appuntamenti/" + id);
+    if (isPaziente || (isAdmin && (tipoLista === "Pazienti" || isNuovaPrenotazioneAdmin))) {
+      await caricaAppuntamentoPerPaziente(idUtente ?? "");
+    } else {
+      await caricaAppuntamentoPerMedico(idUtente ?? "");
+    }
   }
 
   async function caricaDisponibilitaPerMedico(id: string) {
@@ -483,10 +505,11 @@ function AreaPersonale() {
       setSezionePrenotazioni("visualizzaPrenotazioni");
     }
     if (isNuovaPrenotazioneAdmin) {
-      console.log("idUtente" + idUtente);
-      await Promise.all([caricaAppuntamentoPerPaziente(idUtente ?? ""), caricaListaTipologiaVisita()]);
+      console.log("idUtente2" + id);
+      await Promise.all([caricaAppuntamentoPerPaziente(id), caricaListaTipologiaVisita()]);
       setSezionePrenotazioni("nuovaPrenotazioneAdmin");
     }
+
     setSezioneContent("prenotazioni");
   }
 
@@ -665,6 +688,8 @@ function AreaPersonale() {
               <Prenotazioni
                 onAggiungiFascia={aggiungiPiuDisponibilita}
                 giorniSettimana={giorniSettimana}
+                onSettimanaPrecedente={settimanaPrecedente}
+                onSettimanaSuccessiva={settimanaSuccessiva}
                 grigliaOre={grigliaOre}
                 isGiornoDisponibile={(giorno, ora) => oreDisponibiliDelGiorno(giorno.getDay()).includes(ora)}
                 onClickCasella={(giorno, ora) => gestisciCella(giorno, ora)}
@@ -691,7 +716,7 @@ function AreaPersonale() {
                 sezionePrenotazioni={sezionePrenotazioni}
                 onMostraPrenotazioni={mostraPrenotazioni}
                 isNuovaPrenotazioneAdmin={isNuovaPrenotazioneAdmin}
-                setNuovaPrenotazioneAdmin={setNuovaPrenotazioneAdmin}
+                idUtente={idUtente ?? ""}
               ></Prenotazioni>
             )}
           </div>
@@ -844,6 +869,8 @@ function ListaUtenti({
   totalePagineUtenti: number;
   onVisualizzaPrenotazione: (utenteSelezionato: User) => void;
 }>) {
+  const [azioneConferma, setAzioneConferma] = useState<(() => void) | null>(null);
+
   return (
     <div className="row g-0">
       <div className={`p-3  ${stylesShared.cardBorder}`}>
@@ -926,7 +953,7 @@ function ListaUtenti({
                                 </button>
                               </li>
                               <li className="list-inline-item position-relative">
-                                <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => onCancella(user.id.toString())}>
+                                <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => setAzioneConferma(() => () => onCancella(user.id.toString()))}>
                                   <i className="bi bi-trash font-size-18"></i>
                                 </button>
                               </li>
@@ -978,6 +1005,15 @@ function ListaUtenti({
           </div>
         </div>
       </div>
+      <ConfermaEliminazione
+        mostra={azioneConferma !== null}
+        messaggio="Eliminare anagrafica utente?"
+        onConferma={() => {
+          azioneConferma?.(); // esegue l'azione salvata, qualunque sia
+          setAzioneConferma(null);
+        }}
+        onAnnulla={() => setAzioneConferma(null)}
+      />
     </div>
   );
 }
@@ -1081,7 +1117,7 @@ function ModificaAnagrafica({
             <tr>
               <th scope="row">Codice Fiscale</th>
               <td>
-                <input type="text" id="CodiceFiscale" className="form-control" value={form?.codiceFiscale ?? "/"} onChange={(e) => setForm({ ...form, codiceFiscale: e.target.value })} />
+                <input type="text" id="CodiceFiscale" className="form-control" value={form?.codiceFiscale ?? "/"} onChange={(e) => setForm({ ...form, codiceFiscale: e.target.value })} required />
               </td>
             </tr>
             <tr>
@@ -1115,6 +1151,8 @@ function ModificaAnagrafica({
 function Prenotazioni({
   onAggiungiFascia,
   giorniSettimana,
+  onSettimanaPrecedente,
+  onSettimanaSuccessiva,
   grigliaOre,
   isGiornoDisponibile,
   onClickCasella,
@@ -1141,10 +1179,12 @@ function Prenotazioni({
   setSezionePrenotazioni,
   onMostraPrenotazioni,
   isNuovaPrenotazioneAdmin,
-  setNuovaPrenotazioneAdmin,
+  idUtente,
 }: Readonly<{
   onAggiungiFascia: (giorno: number, oraInizio: number, oraFine: number) => void;
   giorniSettimana: Date[];
+  onSettimanaPrecedente: () => void;
+  onSettimanaSuccessiva: () => void;
   grigliaOre: number[];
   isGiornoDisponibile: (giorno: Date, ora: number) => boolean;
   onClickCasella: (giorno: Date, ora: number) => void;
@@ -1171,7 +1211,7 @@ function Prenotazioni({
   setSezionePrenotazioni: React.Dispatch<React.SetStateAction<"nuovaPrenotazioneCalendario" | "visualizzaPrenotazioni" | "nuovaPrenotazioneAdmin">>;
   onMostraPrenotazioni: (id: string) => void;
   isNuovaPrenotazioneAdmin: boolean;
-  setNuovaPrenotazioneAdmin: React.Dispatch<React.SetStateAction<boolean>>;
+  idUtente: string;
 }>) {
   const [mostraFormFasciaDisponibilita, setMostraFormFasciaDisponibilita] = useState(false);
   const [giornoGestioneDisponibilita, setGiornoGestioneDisponibilita] = useState(1);
@@ -1181,8 +1221,18 @@ function Prenotazioni({
   const [medicoSelezionatoId, setMedicoSelezionatoId] = useState("");
   const { utente, isPaziente, isMedico, isAdmin } = useUtente();
   const [idDaEliminare, setIdDaEliminare] = useState<string | null>(null);
+  const [azioneConferma, setAzioneConferma] = useState<(() => void) | null>(null);
 
-  const titoloCalendario = tipoLista === "Medici" ? `del Dr. ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}` : `di ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}`;
+  function calcoloTitoloCalendario() {
+    if (tipoLista === "Medici" && isAdmin && isNuovaPrenotazioneAdmin === false) {
+      return `del Dr. ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}`;
+    } else if (isAdmin && isNuovaPrenotazioneAdmin) {
+      const pazienteSelezionato = tuttiPazienti?.find((x) => x.id === Number(pazienteSelezionatoId));
+      if (pazienteSelezionato) return `di ${pazienteSelezionato?.nome} ${pazienteSelezionato?.cognome}`;
+      else return "";
+    } else return `di ${utenteSelezionato?.nome} ${utenteSelezionato?.cognome}`;
+  }
+  const titoloCalendario = calcoloTitoloCalendario();
 
   const COLORI_PAZIENTE: Record<string, string> = { mio: "bg-success", prenotabile: "bg-info", pieno: "bg-light" };
   const COLORI_MEDICO: Record<string, string> = { prenotato: "bg-success", prenotabile: "bg-info", na: "bg-light" };
@@ -1208,13 +1258,14 @@ function Prenotazioni({
 
   function azioneLatoPaziente(giorno: Date, ora: number, giornoDisponibile: boolean, controlloCella: string) {
     if (giornoDisponibile && controlloCella === "prenotabile") return { titolo: "Clicca per prenotare", azione: () => onPrenota(giorno, ora, tipologiaSelezionataId, medicoSelezionatoId) };
-    if (giornoDisponibile && controlloCella === "mio") return { titolo: "Clicca per disdire", azione: () => onDisdici(giorno, ora, tipologiaSelezionataId, medicoSelezionatoId) };
+    if (giornoDisponibile && controlloCella === "mio")
+      return { titolo: "Clicca per disdire", azione: () => setAzioneConferma(() => () => onDisdici(giorno, ora, tipologiaSelezionataId, medicoSelezionatoId)) };
     return { titolo: "", azione: undefined };
   }
 
   function azioneLatoMedico(giorno: Date, ora: number, controlloCella: string) {
     if (controlloCella === "prenotabile") return { titolo: "Clicca per rimuovere disponibilità", azione: () => onClickCasella(giorno, ora) };
-    if (controlloCella === "prenotato") return { titolo: "Clicca per disdire", azione: () => onDisdici(giorno, ora, tipologiaSelezionataId) };
+    if (controlloCella === "prenotato") return { titolo: "Clicca per disdire", azione: () => setAzioneConferma(() => () => onDisdici(giorno, ora, tipologiaSelezionataId)) };
     if (controlloCella === "na") return { titolo: "Clicca per dare disponibilità", azione: () => onClickCasella(giorno, ora) };
     return { titolo: "", azione: undefined };
   }
@@ -1256,7 +1307,7 @@ function Prenotazioni({
                         onClick={() => {
                           setTipologiaSelezionataId("");
                           setMedicoSelezionatoId("");
-                          onMostraPrenotazioni(isAdmin ? (utenteSelezionato?.id.toString() ?? "") : (utente?.id ?? ""));
+                          onMostraPrenotazioni(idUtente);
                           // setSezionePrenotazioni(isNuovaPrenotazioneAdmin ? "nuovaPrenotazioneAdmin" : "visualizzaPrenotazioni");
                         }}
                       >
@@ -1321,7 +1372,7 @@ function Prenotazioni({
                   <div className="col-lg-12">
                     <div className="table-responsive">
                       <div className="d-flex align-items-center gap-4 px-3 py-2">
-                        {!isPaziente && !isNuovaPrenotazioneAdmin && tipoLista === "Medici" &&(
+                        {!isPaziente && !isNuovaPrenotazioneAdmin && tipoLista === "Medici" && (
                           <>
                             <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la disponibilità</span>
                             <span className="d-flex align-items-center gap-2">
@@ -1330,7 +1381,9 @@ function Prenotazioni({
                             </span>
                           </>
                         )}
-                        {(isPaziente || (isAdmin && isNuovaPrenotazioneAdmin) || tipoLista === "Pazienti") && <span className="text-muted">Clicca su una casella per confermare/disdire la prenotazione:</span>}
+                        {(isPaziente || (isAdmin && isNuovaPrenotazioneAdmin) || tipoLista === "Pazienti") && (
+                          <span className="text-muted">Clicca su una casella per confermare/disdire la prenotazione:</span>
+                        )}
                         <span className="d-flex align-items-center gap-2">
                           <span className={`${styles.tabellaPrenotazioniLegenda} d-inline-block rounded bg-info`}></span>
                           <span>Disponibile </span>
@@ -1373,6 +1426,14 @@ function Prenotazioni({
                     </div>
                   </div>
                 </div>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <button className="btn btn-success rounded-pill px-4 " onClick={onSettimanaPrecedente}>
+                    <i className="bi bi-chevron-left"></i> Settimana precedente
+                  </button>
+                  <button className="btn btn-success rounded-pill px-4 " onClick={onSettimanaSuccessiva}>
+                    Settimana successiva <i className="bi bi-chevron-right"></i>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1383,7 +1444,7 @@ function Prenotazioni({
                   <div className={`card ${styles.projectListTableColor}`}>
                     <div className={`card-header text-white ${styles.titleMedisport}`}>
                       <div className="row">
-                        <div className="col-6">
+                        <div className="col">
                           {isAdmin && <h5 className="m-2">Prenotazioni confermate {titoloCalendario}</h5>}
                           {!isAdmin && <h5 className="m-2">Prenotazioni confermate</h5>}
                         </div>
@@ -1435,7 +1496,7 @@ function Prenotazioni({
                                         <ul className="list-inline m-0">
                                           <li className="list-inline-item position-relative">
                                             {/* <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => onDisdiciById(appuntamento.id.toString())}> */}
-                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => setIdDaEliminare(appuntamento.id.toString())}>
+                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => setAzioneConferma(() => () => onDisdiciById(appuntamento.id.toString()))}>
                                               <i className="bi bi-trash font-size-18"></i>
                                             </button>
                                           </li>
@@ -1522,7 +1583,6 @@ function Prenotazioni({
                               } else {
                                 await Promise.all([onCaricaDisponibilitaPerMedico(medicoSelezionatoId), onCaricaAppuntamentoPerMedico(medicoSelezionatoId)]);
                               }
-                              setNuovaPrenotazioneAdmin(false);
                               setSezionePrenotazioni("nuovaPrenotazioneCalendario");
                             }}
                           >
@@ -1539,7 +1599,6 @@ function Prenotazioni({
                         <button
                           className="btn btn-success rounded-pill px-4 fw-bold"
                           onClick={() => {
-                            setNuovaPrenotazioneAdmin(false);
                             setSezionePrenotazioni("nuovaPrenotazioneCalendario");
                           }}
                         >
@@ -1553,109 +1612,176 @@ function Prenotazioni({
             </div>
           )}
           {sezionePrenotazioni === "nuovaPrenotazioneAdmin" && (
-            <div className="col-4">
-              <div className={`p-3 ${stylesShared.cardBorder}`}>
-                <div className="card">
-                  <div className={`card-header text-white ${styles.titleMedisport}`}>
-                    <h5 className="m-2">Prenota nuova visita</h5>
-                  </div>
-                  <div className="container">
-                    <div className="row p-3">
-                      <label htmlFor="selGiorno" className="form-label text-muted">
-                        Seleziona la tipologia di servizio
-                      </label>
-                      <select
-                        id="selTipologia"
-                        className="form-select"
-                        value={tipologiaSelezionataId}
-                        onChange={async (e) => {
-                          const id = e.target.value;
-                          setTipologiaSelezionataId(id);
-                          setMedicoSelezionatoId("");
-                          if (Number(id) > 0) {
-                            onCaricaMediciPerTipologia(id);
-                          }
-                        }}
-                      >
-                        <option value="">Tutti i servizi</option>
-                        {tipologiaVisite?.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.descrizione}
-                          </option>
-                        ))}
-                      </select>
+            <div className="row ">
+              <div className="col-4">
+                <div className={`p-3 ${stylesShared.cardBorder}`}>
+                  <div className="card">
+                    <div className={`card-header text-white ${styles.titleMedisport}`}>
+                      <h5 className="m-2">Prenota nuova visita</h5>
                     </div>
-                    <div className="row p-3">
-                      <label htmlFor="selGiorno" className="form-label text-muted">
-                        Professionista
-                      </label>
-                      <select
-                        disabled={tipologiaSelezionataId !== "" && (!mediciTipologia || mediciTipologia.length === 0)}
-                        id="selOperatore"
-                        className="form-select"
-                        value={medicoSelezionatoId}
-                        onChange={(e) => {
-                          setMedicoSelezionatoId(e.target.value);
-                        }}
-                      >
-                        <option value="" hidden={tipologiaSelezionataId === ""}>
-                          Tutti gli operatori
-                        </option>
-                        {suddividiMedici().map((m) => (
-                          <option key={m.medicoId} value={m.medicoId}>
-                            {m.medicoNome} {m.medicoCognome}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="row p-3">
-                      <label htmlFor="selGiorno" className="form-label text-muted">
-                        Paziente
-                      </label>
-                      <select
-                        disabled={tipologiaSelezionataId !== "" && (!mediciTipologia || mediciTipologia.length === 0)}
-                        id="selPaziente"
-                        className="form-select"
-                        value={pazienteSelezionatoId}
-                        onChange={(e) => {
-                          setPazienteSelezionatoId(e.target.value);
-                        }}
-                      >
-                        <option value="" disabled hidden>
-                          Tutti i pazienti
-                        </option>
-                        {tuttiPazienti?.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nome} {p.cognome}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="row p-3">
-                      {suddividiMedici()?.length === 0 && (
+                    <div className="container">
+                      <div className="row p-3">
                         <label htmlFor="selGiorno" className="form-label text-muted">
-                          Nessun medico disponibile
+                          Paziente
                         </label>
-                      )}
-                      <button
-                        disabled={
-                          (tipologiaSelezionataId !== "" && (!mediciTipologia || mediciTipologia.length === 0)) ||
-                          (tipologiaSelezionataId === "" && medicoSelezionatoId === "") ||
-                          pazienteSelezionatoId === ""
-                        }
-                        className="btn btn-success rounded-pill px-4 fw-bold"
-                        onClick={async () => {
-                          if (medicoSelezionatoId === "") {
-                            await Promise.all([onCaricaDisponibilitaPerTipologia(tipologiaSelezionataId), onCaricaAppuntamentoPerTipologia(tipologiaSelezionataId)]);
-                          } else {
-                            await Promise.all([onCaricaDisponibilitaPerMedico(medicoSelezionatoId), onCaricaAppuntamentoPerMedico(medicoSelezionatoId)]);
+                        <select
+                          disabled={tipologiaSelezionataId !== "" && (!mediciTipologia || mediciTipologia.length === 0)}
+                          id="selPaziente"
+                          className="form-select"
+                          value={pazienteSelezionatoId}
+                          onChange={(e) => {
+                            setPazienteSelezionatoId(e.target.value);
+                            onMostraPrenotazioni(e.target.value);
+                          }}
+                        >
+                          <option value="" disabled hidden>
+                            Tutti i pazienti
+                          </option>
+                          {tuttiPazienti?.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.nome} {p.cognome}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="row p-3">
+                        <label htmlFor="selGiorno" className="form-label text-muted">
+                          Seleziona la tipologia di servizio
+                        </label>
+                        <select
+                          id="selTipologia"
+                          className="form-select"
+                          value={tipologiaSelezionataId}
+                          onChange={async (e) => {
+                            const id = e.target.value;
+                            setTipologiaSelezionataId(id);
+                            setMedicoSelezionatoId("");
+                            if (Number(id) > 0) {
+                              onCaricaMediciPerTipologia(id);
+                            }
+                          }}
+                        >
+                          <option value="">Tutti i servizi</option>
+                          {tipologiaVisite?.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.descrizione}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="row p-3">
+                        <label htmlFor="selGiorno" className="form-label text-muted">
+                          Professionista
+                        </label>
+                        <select
+                          disabled={tipologiaSelezionataId !== "" && (!mediciTipologia || mediciTipologia.length === 0)}
+                          id="selOperatore"
+                          className="form-select"
+                          value={medicoSelezionatoId}
+                          onChange={(e) => {
+                            setMedicoSelezionatoId(e.target.value);
+                          }}
+                        >
+                          <option value="" hidden={tipologiaSelezionataId === ""}>
+                            Tutti gli operatori
+                          </option>
+                          {suddividiMedici().map((m) => (
+                            <option key={m.medicoId} value={m.medicoId}>
+                              {m.medicoNome} {m.medicoCognome}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="row p-3">
+                        {suddividiMedici()?.length === 0 && (
+                          <label htmlFor="selGiorno" className="form-label text-muted">
+                            Nessun medico disponibile
+                          </label>
+                        )}
+                        <button
+                          disabled={
+                            (tipologiaSelezionataId !== "" && (!mediciTipologia || mediciTipologia.length === 0)) ||
+                            (tipologiaSelezionataId === "" && medicoSelezionatoId === "") ||
+                            pazienteSelezionatoId === ""
                           }
-                          setNuovaPrenotazioneAdmin(true);
-                          setSezionePrenotazioni("nuovaPrenotazioneCalendario");
-                        }}
-                      >
-                        PRENOTA
-                      </button>
+                          className="btn btn-success rounded-pill px-4 fw-bold"
+                          onClick={async () => {
+                            if (medicoSelezionatoId === "") {
+                              await Promise.all([onCaricaDisponibilitaPerTipologia(tipologiaSelezionataId), onCaricaAppuntamentoPerTipologia(tipologiaSelezionataId)]);
+                            } else {
+                              await Promise.all([onCaricaDisponibilitaPerMedico(medicoSelezionatoId), onCaricaAppuntamentoPerMedico(medicoSelezionatoId)]);
+                            }
+                            setSezionePrenotazioni("nuovaPrenotazioneCalendario");
+                          }}
+                        >
+                          PRENOTA
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="col-8">
+                <div className={`p-3 ${stylesShared.cardBorder}`}>
+                  <div className={`card ${styles.projectListTableColor}`}>
+                    <div className={`card-header text-white ${styles.titleMedisport}`}>
+                      <div className="row">
+                        <div className="col-6">
+                          <h5 className="m-2">Prenotazioni confermate {calcoloTitoloCalendario()}</h5>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="row">
+                      <div className="col-lg-12">
+                        <div className="table-responsive">
+                          <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
+                            <thead>
+                              <tr>
+                                <th scope="col" className={`${styles.w20} ps-4`}>
+                                  Tipologia Visita
+                                </th>
+                                <th className={`${styles.w20}`} scope="col">
+                                  Medico
+                                </th>
+                                <th className={`${styles.w20}`} scope="col">
+                                  Giorno
+                                </th>
+                                <th className={`${styles.w20}`} scope="col">
+                                  Ora
+                                </th>
+                                <th className={`${styles.w10}`} scope="col">
+                                  Gestione
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {appuntamenti
+                                ?.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
+                                .map((appuntamento) => {
+                                  const { giorno, ora } = formattaData(appuntamento.data);
+                                  return (
+                                    <tr key={appuntamento.id}>
+                                      <td className="ps-4">{appuntamento.tipologiaVisita}</td>
+                                      <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>
+                                      <td>{giorno}</td>
+                                      <td>{ora}</td>
+                                      <td>
+                                        <ul className="list-inline m-0">
+                                          <li className="list-inline-item position-relative">
+                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => setAzioneConferma(() => () => onDisdiciById(appuntamento.id.toString()))}>
+                                              <i className="bi bi-trash font-size-18"></i>
+                                            </button>
+                                          </li>
+                                        </ul>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1665,13 +1791,13 @@ function Prenotazioni({
         </div>
       </div>
       <ConfermaEliminazione
-        mostra={idDaEliminare !== null}
-        messaggio="Sei sicuro di voler eliminare questo elemento?"
+        mostra={azioneConferma !== null}
+        messaggio="Disdire la prenotazione?"
         onConferma={() => {
-          if (idDaEliminare) onDisdiciById(idDaEliminare); // la tua vera cancellazione
-          setIdDaEliminare(null); // chiudi il modale
+          azioneConferma?.(); // esegue l'azione salvata, qualunque sia
+          setAzioneConferma(null);
         }}
-        onAnnulla={() => setIdDaEliminare(null)}
+        onAnnulla={() => setAzioneConferma(null)}
       />
     </div>
   );

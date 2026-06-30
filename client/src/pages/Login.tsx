@@ -73,7 +73,7 @@ function Login() {
     <section className={`min-vh-100 d-flex align-items-center text-center text-lg-start ${styles.background}`}>
       <div className="container py-4 align-items-center">
         <div className="row g-0 align-items-center">
-          <div className=" col-lg-6 mb-5 mb-lg-0">
+          <div className=" col-6 mb-5 mb-lg-0">
             <div className={styles.cascadingRight + " card bg-body-tertiary"}>
               {sezione === "login" && (
                 <div className="card-body p-5 shadow-5 text-center">
@@ -130,7 +130,7 @@ function Login() {
               {errore && <Avvisi errore={errore} clickChiudi={() => setErrore("")} />}
             </div>
           </div>
-          <div className={`col-lg-6 mb-5 mb-lg-0 ${styles.imageBackground}`}>
+          <div className={`col-6 mb-5 mb-lg-0 ${styles.imageBackground}`}>
             <img src={logo} className="w-100 rounded-4 shadow-4" alt="Logo" />
           </div>
         </div>
