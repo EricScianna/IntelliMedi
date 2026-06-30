@@ -3,6 +3,7 @@ using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 using System.Security.Claims;
 
 namespace IntelliMedi.API.Controllers
@@ -13,6 +14,16 @@ namespace IntelliMedi.API.Controllers
     public class PazientiController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private static readonly Expression<Func<Paziente, PazienteResponse>> ProiezioneResponse =
+            p => new PazienteResponse
+            {
+                Id = p.Id,
+                Nome = p.Nome,
+                Cognome = p.Cognome,
+                CodiceFiscale = p.CodiceFiscale,
+                DataNascita = p.DataNascita,
+                Sesso = p.Sesso
+            };
 
         public PazientiController(AppDbContext context)
         {
@@ -21,15 +32,17 @@ namespace IntelliMedi.API.Controllers
 
         [HttpGet]
         [Authorize(Roles = "Amministratore")]
-        public async Task<ActionResult<IEnumerable<Paziente>>> GetAll()
+        public async Task<ActionResult<IEnumerable<PazienteResponse>>> GetAll()
         {
-            return await _context.Pazienti.ToListAsync();
+            return await _context.Pazienti
+                .Select(ProiezioneResponse)
+                .ToListAsync();
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Paziente>> GetById(int id)
+        public async Task<ActionResult<PazienteResponse>> GetById(int id)
         {
-            var paziente = await _context.Pazienti.FindAsync(id);
+            var paziente = await _context.Pazienti.Where(p => p.Id == id).Select(ProiezioneResponse).FirstOrDefaultAsync();
             if (paziente == null)
                 return NotFound();
             return paziente;

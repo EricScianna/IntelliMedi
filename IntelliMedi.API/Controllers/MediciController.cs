@@ -114,7 +114,7 @@ namespace IntelliMedi.API.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{Id}")]
+        [HttpDelete("{id}")]
         [Authorize(Roles = "Amministratore")]
         public async Task<IActionResult> Delete(int id)
         {

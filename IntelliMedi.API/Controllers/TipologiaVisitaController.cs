@@ -18,41 +18,47 @@ namespace IntelliMedi.API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<TipologiaVisita>>> GetAll()
+        public async Task<ActionResult<IEnumerable<TipologiaVisitaDto>>> GetAll()
         {
-            return await _context.TipologieVisita.ToListAsync();
+            return await _context.TipologieVisita
+                .Select(t => new TipologiaVisitaDto
+                {
+                    Id = t.Id,
+                    Descrizione = t.Descrizione
+                })
+                .ToListAsync();
         }
 
-        [HttpGet("{Id}")]
+        [HttpGet("{id}")]
         public async Task<ActionResult<TipologiaVisita>> GetById(int id)
         {
-            var TipologiaVisita = await _context.TipologieVisita.FindAsync(id);
-            if (TipologiaVisita == null)
+            var tipologiaVisita = await _context.TipologieVisita.FindAsync(id);
+            if (tipologiaVisita == null)
                 return NotFound();
 
-            return TipologiaVisita;
+            return tipologiaVisita;
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(TipologiaVisita TipologiaVisita)
+        public async Task<IActionResult> Create(TipologiaVisita tipologiaVisita)
         {
-            _context.TipologieVisita.Add(TipologiaVisita);
+            _context.TipologieVisita.Add(tipologiaVisita);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetById), new { id = TipologiaVisita.Id }, TipologiaVisita);
+            return CreatedAtAction(nameof(GetById), new { id = tipologiaVisita.Id }, tipologiaVisita);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, TipologiaVisita TipologiaVisita)
+        public async Task<IActionResult> Update(int id, TipologiaVisita tipologiaVisita)
         {
-            if (id != TipologiaVisita.Id)
+            if (id != tipologiaVisita.Id)
                 return BadRequest();
 
             var existingTipologiaVisita = await _context.TipologieVisita.FindAsync(id);
             if (existingTipologiaVisita == null)
                 return NotFound();
 
-            existingTipologiaVisita.Descrizione = TipologiaVisita.Descrizione;
-            existingTipologiaVisita.Medici = TipologiaVisita.Medici;
+            existingTipologiaVisita.Descrizione = tipologiaVisita.Descrizione;
+            existingTipologiaVisita.Medici = tipologiaVisita.Medici;
 
             await _context.SaveChangesAsync();
             return NoContent();

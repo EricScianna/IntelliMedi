@@ -40,3 +40,10 @@ export interface Appuntamento {
   pazienteCognome: string;  
   tipologiaVisita: string;
 }
+
+export interface VoceMenu {
+  etichetta: string;
+  descrizione: string;
+  immagine: string;
+  link: () => void;
+}

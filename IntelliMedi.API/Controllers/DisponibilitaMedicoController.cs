@@ -3,6 +3,7 @@ using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace IntelliMedi.API.Controllers
 {
@@ -12,6 +13,17 @@ namespace IntelliMedi.API.Controllers
     public class DisponibilitaMedicoController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private static readonly Expression<Func<DisponibilitaMedico, DisponibilitaMedicoResponse>> ProiezioneResponse = a => new DisponibilitaMedicoResponse
+        {
+            Id = a.Id,
+            MedicoId = a.MedicoId,
+            MedicoNome = a.Medico.Nome,
+            MedicoCognome = a.Medico.Cognome,
+            TipologiaVisitaId = a.Medico.TipologiaVisite.Select(t => t.Id).FirstOrDefault(),
+            Giorno = a.Giorno,
+            OraInizio = a.OraInizio,
+            OraFine = a.OraFine,
+        };
         public DisponibilitaMedicoController(AppDbContext context)
         {
             _context = context;
@@ -27,39 +39,19 @@ namespace IntelliMedi.API.Controllers
             return await _context.DisponibilitaMedici
             .Where(d => d.Medico.TipologiaVisite
             .Any(x => x.Id == tipologiaId))
-            .Select(a => new DisponibilitaMedicoResponse
-            {
-                Id = a.Id,
-                MedicoId = a.MedicoId,
-                MedicoNome = a.Medico.Nome,
-                MedicoCognome = a.Medico.Cognome,
-                Giorno = a.Giorno,
-                OraInizio = a.OraInizio,
-                OraFine = a.OraFine,
-            })
-            .ToListAsync();
-        }
-
-        //l'URL sarà: GET /api/DisponibilitaMedico/GetSingleDay?medicoId=3&data=2026-06-23
-        [HttpGet("GetSingleDay")]
-        public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetSingleDay(int medicoId, DateOnly data)
-        {
-            //LINQ usa where per filtrare gli elementi di disponibilitaMedici con:
-            //MedicoId uguale a quello del medico ricevuto
-            //stesso giorno della settimana ricevuto
-            return await _context.DisponibilitaMedici
-            .Where(d => d.MedicoId == medicoId && d.Giorno == data.DayOfWeek)
+            .Select(ProiezioneResponse)
             .ToListAsync();
         }
 
         //l'URL sarà: GET /api/DisponibilitaMedico/GetAllDays?medicoId=
         [HttpGet("GetAllDays")]
-        public async Task<ActionResult<IEnumerable<DisponibilitaMedico>>> GetAllDays(int medicoId)
+        public async Task<ActionResult<IEnumerable<DisponibilitaMedicoResponse>>> GetAllDays(int medicoId)
         {
             //LINQ usa where per filtrare gli elementi di disponibilitaMedici con:
             //MedicoId uguale a quello del medico ricevuto
             return await _context.DisponibilitaMedici
             .Where(d => d.MedicoId == medicoId)
+            .Select(ProiezioneResponse)
             .ToListAsync();
         }
 
@@ -68,34 +60,24 @@ namespace IntelliMedi.API.Controllers
         public async Task<ActionResult<IEnumerable<DisponibilitaMedicoResponse>>> GetAll()
         {
             return await _context.DisponibilitaMedici
-                .Select(a => new DisponibilitaMedicoResponse
-                {
-                    Id = a.Id,
-                    MedicoId = a.MedicoId,
-                    MedicoNome = a.Medico.Nome,
-                    MedicoCognome = a.Medico.Cognome,
-                    TipologiaVisitaId = a.Medico.TipologiaVisite.Select(t => t.Id).FirstOrDefault(),
-                    Giorno = a.Giorno,
-                    OraInizio = a.OraInizio,
-                    OraFine = a.OraFine,
-                })
+                .Select(ProiezioneResponse)
                 .ToListAsync();
         }
 
-        [HttpGet("{Id}")]
+        [HttpGet("{id}")]
         public async Task<ActionResult<DisponibilitaMedico>> GetById(int id)
         {
-            var DisponibilitaMedico = await _context.DisponibilitaMedici.FindAsync(id);
-            if (DisponibilitaMedico == null)
+            var disponibilitaMedico = await _context.DisponibilitaMedici.FindAsync(id);
+            if (disponibilitaMedico == null)
                 return NotFound();
 
-            return DisponibilitaMedico;
+            return disponibilitaMedico;
         }
 
         [HttpPost]
         public async Task<IActionResult> Create(DisponibilitaMedicoRequest registrazione)
         {
-            DisponibilitaMedico disponibilitaMedico = new DisponibilitaMedico
+            DisponibilitaMedico disponibilitaMedico = new()
             {
                 Giorno = registrazione.Giorno,
                 MedicoId = registrazione.MedicoId,
@@ -105,26 +87,6 @@ namespace IntelliMedi.API.Controllers
             _context.DisponibilitaMedici.Add(disponibilitaMedico);
             await _context.SaveChangesAsync();
             return CreatedAtAction(nameof(GetById), new { id = disponibilitaMedico.Id }, disponibilitaMedico);
-        }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, DisponibilitaMedico DisponibilitaMedico)
-        {
-            if (id != DisponibilitaMedico.Id)
-                return BadRequest();
-
-            var existingDisponibilitaMedico = await _context.DisponibilitaMedici.FindAsync(id);
-            if (existingDisponibilitaMedico == null)
-                return NotFound();
-
-            existingDisponibilitaMedico.OraFine = DisponibilitaMedico.OraFine;
-            existingDisponibilitaMedico.OraInizio = DisponibilitaMedico.OraInizio;
-            existingDisponibilitaMedico.MedicoId = DisponibilitaMedico.MedicoId;
-            existingDisponibilitaMedico.Medico = DisponibilitaMedico.Medico;
-            existingDisponibilitaMedico.Giorno = DisponibilitaMedico.Giorno;
-
-            await _context.SaveChangesAsync();
-            return NoContent();
         }
 
         [HttpDelete("{id}")]

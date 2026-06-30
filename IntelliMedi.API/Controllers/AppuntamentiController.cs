@@ -3,7 +3,7 @@ using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+using System.Linq.Expressions;
 
 namespace IntelliMedi.API.Controllers
 {
@@ -13,24 +13,8 @@ namespace IntelliMedi.API.Controllers
     public class AppuntamentiController : ControllerBase
     {
         private readonly AppDbContext _context;
-        public AppuntamentiController(AppDbContext context)
-        {
-            _context = context;
-        }
-
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Appuntamento>>> GetAll()
-        {
-            return await _context.Appuntamenti.ToListAsync();
-        }
-        [HttpGet("GetByPaziente")]
-        public async Task<ActionResult<IEnumerable<AppuntamentoResponse>>> GetByPaziente(int pazienteId)
-        {
-            //LINQ usa where per filtrare gli elementi di appuntamenti con:
-            //medicoId uguale a quella ricevuta
-            return await _context.Appuntamenti
-            .Where(d => d.PazienteId == pazienteId)
-            .Select(a => new AppuntamentoResponse
+        private static readonly Expression<Func<Appuntamento, AppuntamentoResponse>> ProiezioneResponse =
+            a => new AppuntamentoResponse
             {
                 Id = a.Id,
                 Data = a.Data,
@@ -42,7 +26,20 @@ namespace IntelliMedi.API.Controllers
                 PazienteNome = a.Paziente.Nome,
                 PazienteCognome = a.Paziente.Cognome,
                 TipologiaVisita = a.TipologiaVisita.Descrizione,
-            })
+            };
+        public AppuntamentiController(AppDbContext context)
+        {
+            _context = context;
+        }
+
+        [HttpGet("GetByPaziente")]
+        public async Task<ActionResult<IEnumerable<AppuntamentoResponse>>> GetByPaziente(int pazienteId)
+        {
+            //LINQ usa where per filtrare gli elementi di appuntamenti con:
+            //medicoId uguale a quella ricevuta
+            return await _context.Appuntamenti
+            .Where(d => d.PazienteId == pazienteId)
+            .Select(ProiezioneResponse)
             .ToListAsync();
         }
 
@@ -53,19 +50,7 @@ namespace IntelliMedi.API.Controllers
             //medicoId uguale a quella ricevuta
             return await _context.Appuntamenti
             .Where(d => d.MedicoId == medicoId)
-            .Select(a => new AppuntamentoResponse
-            {
-                Id = a.Id,
-                Data = a.Data,
-                MedicoId = a.MedicoId,
-                PazienteId = a.PazienteId,
-                TipologiaVisitaId = a.TipologiaVisitaId,
-                MedicoNome = a.Medico.Nome,
-                MedicoCognome = a.Medico.Cognome,
-                PazienteNome = a.Paziente.Nome,
-                PazienteCognome = a.Paziente.Cognome,
-                TipologiaVisita = a.TipologiaVisita.Descrizione,
-            })
+            .Select(ProiezioneResponse)
             .ToListAsync();
         }
 
@@ -77,21 +62,11 @@ namespace IntelliMedi.API.Controllers
             return await _context.Appuntamenti
             .Where(d => d.Medico.TipologiaVisite
             .Any(x => x.Id == tipologiaId))
-            .Select(a => new AppuntamentoResponse
-            {
-                Id = a.Id,
-                Data = a.Data,
-                MedicoId = a.MedicoId,
-                PazienteId = a.PazienteId,
-                TipologiaVisitaId = a.TipologiaVisitaId,
-                MedicoNome = a.Medico.Nome,
-                MedicoCognome = a.Medico.Cognome,
-                TipologiaVisita = a.TipologiaVisita.Descrizione,
-            })
+            .Select(ProiezioneResponse)
             .ToListAsync();
         }
 
-        [HttpGet("{Id}")]
+        [HttpGet("{id}")]
         public async Task<ActionResult<Appuntamento>> GetById(int id)
         {
             var appuntamento = await _context.Appuntamenti.FindAsync(id);
@@ -125,27 +100,6 @@ namespace IntelliMedi.API.Controllers
             _context.Appuntamenti.Add(appuntamento);
             await _context.SaveChangesAsync();
             return CreatedAtAction(nameof(GetById), new { id = appuntamento.Id }, appuntamento);
-        }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, Appuntamento appuntamento)
-        {
-            if (id != appuntamento.Id)
-                return BadRequest();
-
-            var existingAppuntamento = await _context.Appuntamenti.FindAsync(id);
-            if (existingAppuntamento == null)
-                return NotFound();
-
-            existingAppuntamento.PazienteId = appuntamento.PazienteId;
-            existingAppuntamento.Paziente = appuntamento.Paziente;
-            existingAppuntamento.MedicoId = appuntamento.MedicoId;
-            //existingAppuntamento.Medico = appuntamento.Medico;
-            existingAppuntamento.TipologiaVisitaId = appuntamento.TipologiaVisitaId;
-            existingAppuntamento.TipologiaVisita = appuntamento.TipologiaVisita;
-
-            await _context.SaveChangesAsync();
-            return NoContent();
         }
 
         [HttpDelete("{id}")]
