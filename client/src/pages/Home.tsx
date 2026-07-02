@@ -166,14 +166,9 @@ function Home() {
             </div>
             <div className="col-12 col-md-7 d-flex flex-column flex-md-row gap-2">
               <select className="form-select form-select-lg rounded-pill d-inline">
-                <option>Visita sportiva</option>
-                <option>Ortopedia</option>
-                <option>Nutrizione</option>
-                <option>Cardiologia</option>
-                <option>Psicologia</option>
-                <option>Fisioterapia</option>
-                <option>Holter cardiaco</option>
-                <option>Onde d'urto</option>
+                {servizi.map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
               </select>
               <button className="btn btn-outline-light rounded-pill px-4 fw-bold" onClick={() => navigate("/login")}>
                 PRENOTA

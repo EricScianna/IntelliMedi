@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom";
 import styles from "./Login.module.css";
 import logo from "../assets/logo3.png";
 import type { DatiForm } from "../types";
-import { API_URL, FORM_VUOTO } from "../constants";
+import { FORM_VUOTO } from "../constants";
 import { useErrore } from "../hooks/useErrore";
 import FormDatiUtente from "../components/FormDatiUtente";
 import Avvisi from "../components/Avvisi";
 import { useUtente } from "../context/UtenteContext";
+import { post } from "../api";
 
 function Login() {
   const { setUtente } = useUtente();
@@ -28,44 +29,28 @@ function Login() {
 
   async function postLogin(e: React.SubmitEvent) {
     e.preventDefault();
+    try {
+      const dati = await post("auth", { username, password });
+      localStorage.setItem("token", dati.token);
+      localStorage.setItem("id", String(dati.utente.id));
+      localStorage.setItem("ruolo", dati.utente.ruolo);
+      localStorage.setItem("nome", dati.utente.nome);
+      localStorage.setItem("cognome", dati.utente.cognome);
 
-    const risposta = await fetch(`${API_URL}/api/auth`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-
-    if (!risposta.ok) {
+      setUtente({ id: String(dati.utente.id), ruolo: dati.utente.ruolo, nome: dati.utente.nome, cognome: dati.utente.cognome });
+      navigate("/area-personale");
+    } catch {
       setErrore("Username o password non corretti");
-      return;
     }
-
-    const dati = await risposta.json();
-
-    localStorage.setItem("token", dati.token);
-    localStorage.setItem("id", String(dati.utente.id));
-    localStorage.setItem("ruolo", dati.utente.ruolo);
-    localStorage.setItem("nome", dati.utente.nome);
-    localStorage.setItem("cognome", dati.utente.cognome);
-
-    setUtente({ id: String(dati.utente.id), ruolo: dati.utente.ruolo, nome: dati.utente.nome, cognome: dati.utente.cognome });
-
-    navigate("/area-personale");
   }
 
   async function postSignUp(e: React.SubmitEvent) {
     e.preventDefault();
-
-    const risposta = await fetch(`${API_URL}/api/Pazienti`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, username, password }),
-    });
-
-    if (risposta.ok) {
-      postLogin(e);
-    } else {
-      setErrore("Utente già esistente o dati non validi");
+    try {
+      await post("Pazienti", { ...form, username, password });
+      await postLogin(e);
+    } catch {
+      setErrore("Username o password non corretti");
     }
   }
 
@@ -73,7 +58,7 @@ function Login() {
     <section className={`min-vh-100 d-flex align-items-center text-center text-lg-start ${styles.background}`}>
       <div className="container py-4 align-items-center">
         <div className="row g-0 align-items-center">
-          <div className=" col-6 mb-5 mb-lg-0">
+          <div className=" col-12 col-lg-6 mb-5 mb-lg-0">
             <div className={styles.cascadingRight + " card bg-body-tertiary"}>
               {sezione === "login" && (
                 <div className="card-body p-5 shadow-5 text-center">
@@ -130,7 +115,7 @@ function Login() {
               {errore && <Avvisi errore={errore} clickChiudi={() => setErrore("")} />}
             </div>
           </div>
-          <div className={`col-6 mb-5 mb-lg-0 ${styles.imageBackground}`}>
+          <div className={`col-lg-6 d-none d-lg-block mb-5 mb-lg-0 ${styles.imageBackground}`}>
             <img src={logo} className="w-100 rounded-4 shadow-4" alt="Logo" />
           </div>
         </div>

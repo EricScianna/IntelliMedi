@@ -1,4 +1,4 @@
-import styles from "../pages/AreaPersonale.module.css";
+import styles from "../styles/areaRiservata.module.css";
 import stylesShared from "../shared.module.css";
 import { useState } from "react";
 import { GIORNI_SETTIMANA } from "../constants";
@@ -78,8 +78,7 @@ function Prenotazioni({
   const [oraFineGestioneDisponibilita, setOraFineGestioneDisponibilita] = useState(19);
   const [tipologiaSelezionataId, setTipologiaSelezionataId] = useState("");
   const [medicoSelezionatoId, setMedicoSelezionatoId] = useState("");
-  const { utente, isPaziente, isMedico, isAdmin } = useUtente();
-  const [idDaEliminare, setIdDaEliminare] = useState<string | null>(null);
+  const { isPaziente, isMedico, isAdmin } = useUtente();
   const [azioneConferma, setAzioneConferma] = useState<(() => void) | null>(null);
 
   function calcoloTitoloCalendario() {
@@ -129,32 +128,16 @@ function Prenotazioni({
     return { titolo: "", azione: undefined };
   }
 
-  function formattaData(dataIso: string) {
-    const d = new Date(dataIso);
-    return {
-      giorno: d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }),
-      ora: d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
-    };
-  }
-
   function suddividiMedici() {
     const fonte = sezionePrenotazioni === "nuovaPrenotazioneAdmin" && tipologiaSelezionataId === "" ? tuttiMedici : mediciTipologia;
     return [...new Map(fonte?.map((d) => [d.medicoId, d])).values()];
   }
 
-  function calcolaControparte() 
-  {
-    if(isPaziente || (isAdmin && tipoLista === "Pazienti")) return "Medico"
-    else return "Paziente"
+  function calcolaControparte() {
+    if (isPaziente || (isAdmin && tipoLista === "Pazienti")) return "Medico";
+    else return "Paziente";
   }
   const controparte = calcolaControparte();
-
-    function calcolaControparteValore() 
-  {
-    if(isPaziente || (isAdmin && tipoLista === "Pazienti")) return "Medico"
-    else return "Paziente"
-  }
-  const controparteValore = calcolaControparteValore();
 
   return (
     <div className={styles.prenotazioniContainer}>
@@ -187,7 +170,7 @@ function Prenotazioni({
                       </button>
                       {mostraFormFasciaDisponibilita && (
                         <div className={`${styles.pannelloDisponibilita} me-4`}>
-                          <div className={`d-flex gap-3 align-items-end p-3 ${stylesShared.cardBorder}`}>
+                          <div className={`d-flex flex-wrap gap-3 align-items-end p-3 ${stylesShared.cardBorder}`}>
                             <div>
                               <label htmlFor="selGiorno" className="form-label text-muted">
                                 Giorno
@@ -244,7 +227,7 @@ function Prenotazioni({
                   <div className="col-lg-12">
                     <div className="table-responsive">
                       <div className="d-flex align-items-center gap-4 px-3 py-2">
-                        {!isPaziente && !isNuovaPrenotazioneAdmin && tipoLista === "Medici" && (
+                        {(isMedico || (!isNuovaPrenotazioneAdmin && tipoLista === "Medici")) && (
                           <>
                             <span className="text-muted">Clicca su una casella per aggiungere o rimuovere la disponibilità</span>
                             <span className="d-flex align-items-center gap-2">
@@ -253,7 +236,7 @@ function Prenotazioni({
                             </span>
                           </>
                         )}
-                        {(isPaziente || (isAdmin && isNuovaPrenotazioneAdmin) || tipoLista === "Pazienti") && (
+                        {((isPaziente || (isAdmin && isNuovaPrenotazioneAdmin) || tipoLista === "Pazienti")) && (
                           <span className="text-muted">Clicca su una casella per confermare/disdire la prenotazione:</span>
                         )}
                         <span className="d-flex align-items-center gap-2">
@@ -311,7 +294,7 @@ function Prenotazioni({
           )}
           {sezionePrenotazioni === "visualizzaPrenotazioni" && (
             <div className="row">
-              <div className="col-8">
+              <div className="col-12 col-lg-8 mb-4 mb-lg-0">
                 <div className={`p-3 ${stylesShared.cardBorder}`}>
                   <div className={`card ${styles.projectListTableColor}`}>
                     <div className={`card-header text-white ${styles.titleMedisport}`}>
@@ -325,67 +308,19 @@ function Prenotazioni({
                     <div className="row">
                       <div className="col-lg-12">
                         <div className="table-responsive">
-                          {/* <TabellaAppuntamenti intestazioneControparte={controparte} appuntamenti={appuntamenti} onCancella={(id) => setAzioneConferma(() => () => onDisdiciById(id.toString()))} valoreControparte={controparteValore}></TabellaAppuntamenti> */}
-                          <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
-                            <thead>
-                              <tr>
-                                <th scope="col" className={`${styles.w20} ps-4`}>
-                                  Tipologia Visita
-                                </th>
-                                {(isPaziente || (isAdmin && tipoLista === "Pazienti")) && (
-                                  <th className={`${styles.w20}`} scope="col">
-                                    Medico
-                                  </th>
-                                )}
-                                {(isMedico || (isAdmin && tipoLista === "Medici")) && (
-                                  <th className={`${styles.w20}`} scope="col">
-                                    Paziente
-                                  </th>
-                                )}
-                                <th className={`${styles.w20}`} scope="col">
-                                  Giorno
-                                </th>
-                                <th className={`${styles.w20}`} scope="col">
-                                  Ora
-                                </th>
-                                <th className={`${styles.w10}`} scope="col">
-                                  Gestione
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {appuntamenti
-                                ?.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
-                                .map((appuntamento) => {
-                                  const { giorno, ora } = formattaData(appuntamento.data);
-                                  return (
-                                    <tr key={appuntamento.id}>
-                                      <td className="ps-4">{appuntamento.tipologiaVisita}</td>
-                                      {(isPaziente || (isAdmin && tipoLista === "Pazienti")) && <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>}
-                                      {(isMedico || (isAdmin && tipoLista === "Medici")) && <td>{`${appuntamento.pazienteNome} ${appuntamento.pazienteCognome}`}</td>}
-                                      <td>{giorno}</td>
-                                      <td>{ora}</td>
-                                      <td>
-                                        <ul className="list-inline m-0">
-                                          <li className="list-inline-item position-relative">
-                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => setAzioneConferma(() => () => onDisdiciById(appuntamento.id.toString()))}>
-                                              <i className="bi bi-trash font-size-18"></i>
-                                            </button>
-                                          </li>
-                                        </ul>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                            </tbody>
-                          </table>
+                          <TabellaAppuntamenti
+                            intestazioneControparte={controparte}
+                            appuntamenti={appuntamenti}
+                            onCancella={(id) => setAzioneConferma(() => () => onDisdiciById(id.toString()))}
+                            valoreControparte={controparte === "Medico" ? (a) => `${a.medicoNome} ${a.medicoCognome}` : (a) => `${a.pazienteNome} ${a.pazienteCognome}`}
+                          ></TabellaAppuntamenti>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="col-4">
+              <div className="col-12 col-lg-4">
                 <div className={`p-3 ${stylesShared.cardBorder}`}>
                   <div className="card">
                     <div className={`card-header text-white ${styles.titleMedisport}`}>
@@ -406,7 +341,7 @@ function Prenotazioni({
                               const id = e.target.value;
                               setTipologiaSelezionataId(id);
                               setMedicoSelezionatoId("");
-                              onCaricaMediciPerTipologia(id);
+                              await onCaricaMediciPerTipologia(id);
                             }}
                           >
                             <option value="" disabled hidden>
@@ -485,7 +420,7 @@ function Prenotazioni({
           )}
           {sezionePrenotazioni === "nuovaPrenotazioneAdmin" && (
             <div className="row ">
-              <div className="col-4">
+              <div className="col-12 col-lg-4 mb-4 mb-lg-0">
                 <div className={`p-3 ${stylesShared.cardBorder}`}>
                   <div className="card">
                     <div className={`card-header text-white ${styles.titleMedisport}`}>
@@ -529,7 +464,7 @@ function Prenotazioni({
                             setTipologiaSelezionataId(id);
                             setMedicoSelezionatoId("");
                             if (Number(id) > 0) {
-                              onCaricaMediciPerTipologia(id);
+                              await onCaricaMediciPerTipologia(id);
                             }
                           }}
                         >
@@ -594,7 +529,7 @@ function Prenotazioni({
                   </div>
                 </div>
               </div>
-              <div className="col-8">
+              <div className="col-12 col-lg-8">
                 <div className={`p-3 ${stylesShared.cardBorder}`}>
                   <div className={`card ${styles.projectListTableColor}`}>
                     <div className={`card-header text-white ${styles.titleMedisport}`}>
@@ -607,51 +542,12 @@ function Prenotazioni({
                     <div className="row">
                       <div className="col-lg-12">
                         <div className="table-responsive">
-                          <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
-                            <thead>
-                              <tr>
-                                <th scope="col" className={`${styles.w20} ps-4`}>
-                                  Tipologia Visita
-                                </th>
-                                <th className={`${styles.w20}`} scope="col">
-                                  Medico
-                                </th>
-                                <th className={`${styles.w20}`} scope="col">
-                                  Giorno
-                                </th>
-                                <th className={`${styles.w20}`} scope="col">
-                                  Ora
-                                </th>
-                                <th className={`${styles.w10}`} scope="col">
-                                  Gestione
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {appuntamenti
-                                ?.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
-                                .map((appuntamento) => {
-                                  const { giorno, ora } = formattaData(appuntamento.data);
-                                  return (
-                                    <tr key={appuntamento.id}>
-                                      <td className="ps-4">{appuntamento.tipologiaVisita}</td>
-                                      <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>
-                                      <td>{giorno}</td>
-                                      <td>{ora}</td>
-                                      <td>
-                                        <ul className="list-inline m-0">
-                                          <li className="list-inline-item position-relative">
-                                            <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => setAzioneConferma(() => () => onDisdiciById(appuntamento.id.toString()))}>
-                                              <i className="bi bi-trash font-size-18"></i>
-                                            </button>
-                                          </li>
-                                        </ul>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                            </tbody>
-                          </table>
+                          <TabellaAppuntamenti
+                            intestazioneControparte={"Medico"}
+                            appuntamenti={appuntamenti}
+                            onCancella={(id) => setAzioneConferma(() => () => onDisdiciById(id.toString()))}
+                            valoreControparte={(a) => `${a.medicoNome} ${a.medicoCognome}`}
+                          ></TabellaAppuntamenti>
                         </div>
                       </div>
                     </div>

@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 
 //context  comunica a tutti chi è l'utente loggato in quel momento. lo fa una volta sola a tutti i componenti
 //cosa espone
-interface Utente {
+export interface Utente {
   id: string;
   ruolo: string;
   nome: string;

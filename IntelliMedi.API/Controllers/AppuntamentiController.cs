@@ -81,8 +81,21 @@ namespace IntelliMedi.API.Controllers
         {
             //lo slot rientra nella disponibilità di quel medico? (giorno-settimana + ora);
             var disponibilita = await _context.DisponibilitaMedici.Where(d => d.MedicoId == registrazione.MedicoId).ToListAsync();
-            var medicoDisp = disponibilita.Any(d => d.Giorno == registrazione.Data.DayOfWeek && d.OraInizio.Hour <= registrazione.Data.Hour && d.OraFine.Hour > registrazione.Data.Hour);
-            if (!medicoDisp) return BadRequest("Slot fuori dalla disponibilità del medico");
+
+            var dataApp = DateOnly.FromDateTime(registrazione.Data);
+            var oraApp = registrazione.Data.Hour;
+
+            // coperto: disponibilità positiva (one-off sulla data, o ricorrente sul giorno-settimana) nell'ora giusta
+            var coperto = disponibilita.Any(d => d.Disponibile
+                && d.OraInizio.Hour <= oraApp && d.OraFine.Hour > oraApp
+                && (d.Data == dataApp || (d.Data == null && d.Giorno == registrazione.Data.DayOfWeek)));
+
+            // eccezione: record "non disponibile" per quella data/ora
+            var eccezione = disponibilita.Any(d => !d.Disponibile && d.Data == dataApp
+                && d.OraInizio.Hour <= oraApp && d.OraFine.Hour > oraApp);
+
+            if (!coperto || eccezione) return BadRequest("Slot fuori dalla disponibilità del medico");
+
             //se quel medico è già impegnato in quella data: Conflict()
             if (await _context.Appuntamenti.AnyAsync(d => d.MedicoId == registrazione.MedicoId && d.Data == registrazione.Data))
                 return Conflict("Il medico è già impegnato in un altro appuntamento");

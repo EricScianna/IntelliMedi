@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import styles from "./AreaPersonale.module.css";
+import styles from "../styles/areaRiservata.module.css";
 import stylesShared from "../shared.module.css";
-import type { DatiForm, TipologiaVisita, User, DisponibilitaMedico, Appuntamento, VoceMenu } from "../types";
-import { API_URL, FORM_VUOTO } from "../constants";
+import type { DatiForm, TipologiaVisita, User, VoceMenu } from "../types";
+import { FORM_VUOTO } from "../constants";
 import { useErrore } from "../hooks/useErrore";
+import { usePrenotazioni } from "../hooks/usePrenotazioni";
 import { useUtente } from "../context/UtenteContext";
 import Avvisi from "../components/Avvisi";
 import Header from "../components/Header";
@@ -15,6 +16,7 @@ import Sidebar from "../components/Sidebar";
 import Cards from "../components/Cards";
 import ListaUtenti from "../components/ListaUtenti";
 import Prenotazioni from "../components/Prenotazioni";
+import { get, post, put, del } from "../api";
 
 const rottaPerRuolo: Record<string, string> = { Paziente: "Pazienti", Medico: "Medici" };
 
@@ -25,23 +27,11 @@ interface Colonna {
   onModificaInLista?: (utente: User) => void;
 }
 
-//riceve in input gli orari del medico e li inserisce in un array
-function generaOrari(oraInizio: string, oraFine: string): number[] {
-  const inizio = oraInizio.split(":", 1);
-  const fine = oraFine.split(":", 1);
-  const inizioInt = Number.parseInt(inizio[0]);
-  const fineInt = Number.parseInt(fine[0]);
-  const arrayOrari: number[] = [];
-  for (let i = inizioInt; i < fineInt; i++) {
-    arrayOrari.push(i);
-  }
-  return arrayOrari;
-}
-
 //COMPONENTE: AreaPersonale (PascalCase obbligatorio): funzione principale di una pagina React.
 //tranne useState, tutto quello che c'è all'interno viene ricreato ad ogni render
 //Ogni setState prenota un render, il valore si aggiorna solo al render successivo
 function AreaPersonale() {
+  //#region Stati
   const { utente, isPaziente, isMedico, isAdmin, setUtente } = useUtente();
   const ruolo = utente?.ruolo ?? ""; // solo se ti serve ancora 'ruolo' altrove (rottaPerRuolo[ruolo], vociPerRuolo[ruolo]…)
 
@@ -57,7 +47,7 @@ function AreaPersonale() {
   const { errore, setErrore } = useErrore();
   // Stati per la gestione della visualizzazione sezioni
   const navigate = useNavigate();
-  const [sezioneContent, setSezioneContent] = useState<"contentCards" | "anagrafica" | "prenotazioni" | "recensioni" | "listaUtenti" | "creaMedico">("contentCards");
+  const [sezioneContent, setSezioneContent] = useState<"contentCards" | "anagrafica" | "prenotazioni" | "listaUtenti" | "postMedico">("contentCards");
   const [sezioneAnagrafica, setSezioneAnagrafica] = useState<"visualizza" | "modifica">("visualizza");
   const [sezionePrenotazioni, setSezionePrenotazioni] = useState<"visualizzaPrenotazioni" | "nuovaPrenotazioneCalendario" | "nuovaPrenotazioneAdmin">("visualizzaPrenotazioni");
   const [tipoLista, setTipoLista] = useState(""); //usato dall'amministratore quando seleziona un utente
@@ -70,27 +60,16 @@ function AreaPersonale() {
   const inizioPaginaUtenti = (indicePagina - 1) * USERS_PER_PAGINA;
   const usersPagina = users?.slice(inizioPaginaUtenti, inizioPaginaUtenti + USERS_PER_PAGINA);
   // Stati per la gestione delle prenotazioni
-  const [disponibilitaMedico, setDisponibilitaMedico] = useState<DisponibilitaMedico[] | null>(null);
-  const [tuttiMedici, setTuttiMedici] = useState<DisponibilitaMedico[] | null>(null);
-  const [tuttiPazienti, setTuttiPazienti] = useState<User[] | null>(null);
   const [pazienteSelezionatoId, setPazienteSelezionatoId] = useState("");
-  const [mediciTipologia, setMediciTipologia] = useState<DisponibilitaMedico[] | null>(null);
-  const [appuntamenti, setAppuntamenti] = useState<Appuntamento[] | null>(null);
   const [isNuovaPrenotazioneAdmin, setNuovaPrenotazioneAdmin] = useState<boolean>(false);
-  const [lunediCorrente, setLunediCorrente] = useState<Date>(() => {
-    const oggi = new Date();
-    const g = oggi.getDay();
-    const offset = g === 0 ? 6 : g - 1;
-    oggi.setDate(oggi.getDate() - offset);
-    return oggi;
-  });
+  //#endregion
 
   const colonnePerTipo: Record<string, Colonna> = {
     Medici: {
       etichetta: "Medici",
       onNuovo: () => {
         caricaListaTipologiaVisita();
-        cambiaModalita("creaMedico");
+        cambiaModalita("postMedico");
       },
       tipologiaServizio: true,
       onModificaInLista: (utente) => {
@@ -102,7 +81,6 @@ function AreaPersonale() {
         });
       },
     },
-
     Pazienti: { etichetta: "Pazienti" },
   };
 
@@ -142,28 +120,8 @@ function AreaPersonale() {
     ],
   };
 
-  function calcolaIdUtente() {
-    if (isNuovaPrenotazioneAdmin) return pazienteSelezionatoId;
-    if (ruolo === "Amministratore") return utenteSelezionato?.id.toString();
-    return utente?.id;
-  }
-  const idUtente = calcolaIdUtente();
-
   const vociSidebar = vociPerRuolo[ruolo] ?? [];
-  const colClass = vociSidebar.length > 3 ? "col-5 g-5" : "col-3";
   const nomeVisualizzato = ruolo === "Amministratore" ? "Amministratore" : `${user?.nome} ${user?.cognome}`;
-
-  //creazione headers del metodi CRUD
-  const createHeaders = useCallback((hasContentType: boolean) => {
-    const headers: Record<string, string> = {
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    };
-
-    if (hasContentType) {
-      headers["Content-Type"] = "application/json";
-    }
-    return headers;
-  }, []);
 
   async function nuovaPrenotazioneAdmin() {
     setAppuntamenti([]);
@@ -176,155 +134,88 @@ function AreaPersonale() {
     setSezioneContent("prenotazioni");
   }
 
-  function oreDisponibiliDelGiorno(giorno: number): number[] {
-    // filtra disponibilitaMedico per il giorno richiesto, poi flatMap con generaOrari
-    const oreDisponibili = disponibilitaMedico?.filter((d) => d.giorno === giorno).flatMap((d) => generaOrari(d.oraInizio, d.oraFine)) ?? [];
-    return oreDisponibili;
-  }
-
-  function settimanaSuccessiva() {
-    const lunediCopia = new Date(lunediCorrente);
-    lunediCopia.setDate(lunediCopia.getDate() + 7);
-    setLunediCorrente(lunediCopia);
-  }
-
-  function settimanaPrecedente() {
-    const lunediCopia = new Date(lunediCorrente);
-    lunediCopia.setDate(lunediCopia.getDate() - 7);
-    setLunediCorrente(lunediCopia);
-  }
-
-  const giorniSettimana: Date[] = Array.from({ length: 7 }, (_, i) => {
-    const lunediCopia = new Date(lunediCorrente);
-    lunediCopia.setDate(lunediCopia.getDate() + i);
-    return lunediCopia;
-  });
-
-  //ore totali in griglia: 8/19
-  const grigliaOre = Array.from({ length: 12 }, (_, i) => i + 8);
-
-  //vecchia intenstazione: async function getGenerico(percorso: string) {
-  //ho dovuto rendere stabile getGenerico con useCallback. setErrore è un set (quindi stabile), ma inserito nelle dipendenze perché arriva da un custom hook
   const getGenerico = useCallback(
     async (percorso: string) => {
-      const risposta = await fetch(`${API_URL}/api/${percorso}`, {
-        method: "GET",
-        headers: createHeaders(false),
-      });
-
-      if (risposta.ok) return risposta.json();
-      setErrore("Dati non validi");
-      return false;
+      try {
+        return await get(percorso);
+      } catch {
+        setErrore("Dati non validi");
+        return false;
+      }
     },
-    [createHeaders, setErrore],
+    [setErrore],
   );
 
-  async function postUtente() {
-    const risposta = await fetch(`${API_URL}/api/${tipoLista}`, {
-      method: "POST",
-      headers: createHeaders(true),
-      body: JSON.stringify({ ...form, username, password }),
-    });
-
-    if (risposta.ok) return true;
-    setErrore("Utente già esistente o dati non validi");
-    return false;
+  function calcolaIdUtente() {
+    if (isNuovaPrenotazioneAdmin) return pazienteSelezionatoId;
+    if (ruolo === "Amministratore") return utenteSelezionato?.id.toString();
+    return utente?.id;
   }
+  const idUtente = calcolaIdUtente();
 
-  async function postDisponibilitaMedico(giorno: number, ora: number) {
-    // template literal = modo di scrivere stringhe usando i backtick ` (alt+096) invece degli apici ' o ".
-    // dentro posso infilare espressioni con ${...}
-    const oraInizio = `${ora.toString().padStart(2, "0")}:00:00`;
-    const oraFine = `${(ora + 1).toString().padStart(2, "0")}:00:00`;
-    const risposta = await fetch(`${API_URL}/api/DisponibilitaMedico`, {
-      method: "POST",
-      headers: createHeaders(true),
-      body: JSON.stringify({ medicoId: idUtente, giorno, oraInizio, oraFine }),
-    });
+  const {
+    oreDisponibiliDelGiorno,
+    statoCellaPaziente,
+    statoCellaMedico,
+    giorniSettimana,
+    grigliaOre,
+    settimanaPrecedente,
+    settimanaSuccessiva,
+    appuntamenti,
+    mediciTipologia,
+    tuttiMedici,
+    tuttiPazienti,
+    caricaAppuntamentoPerTipologia,
+    caricaAppuntamentoPerMedico,
+    caricaAppuntamentoPerPaziente,
+    caricaDisponibilitaPerMedico,
+    caricaDisponibilitaPerTipologia,
+    caricaMediciPerTipologia,
+    caricaTuttiMedici,
+    caricaTuttiPazienti,
+    setAppuntamenti,
+    postAppuntamento,
+    gestisciCella,
+    aggiungiPiuDisponibilita,
+    cancellaAppuntamento,
+    cancellaAppuntamentoById,
+  } = usePrenotazioni({ getGenerico, idUtente, setErrore, isPaziente, isAdmin, tipoLista, isNuovaPrenotazioneAdmin, deleteGenerico });
 
-    if (risposta.ok) return true;
-    setErrore("Errore nella gestione disponibilità");
-    return false;
-  }
-
-  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) {
-    const nuovaData = new Date(giorno);
-    nuovaData.setHours(oraAppuntamento, 0, 0, 0);
-    const dataFormattata =
-      nuovaData.getFullYear().toString() +
-      "-" +
-      (nuovaData.getMonth() + 1).toString().padStart(2, "0") +
-      "-" +
-      nuovaData.getDate().toString().padStart(2, "0") +
-      "T" +
-      nuovaData.getHours().toString().padStart(2, "0") +
-      ":00:00";
-
-    const medicoScelto = tuttiMedici?.find((m) => m.medicoId === Number(medicoSelezionatoId));
-    const tipologiaId = tipologiaSelezionataId ? Number(tipologiaSelezionataId) : medicoScelto?.tipologiaVisitaId;
-
-    if (!tipologiaId) {
-      setErrore("Seleziona un servizio o un medico");
-      return false;
-    }
-
-    const { mediciDisponibiliId, appuntamentiCella } = datiCella(giorno, oraAppuntamento);
-    //estrae gli id dei medici occupati
-    const mediciOccupati = appuntamentiCella?.map((x) => x.medicoId);
-    //controlla se ne esiste almeno uno che NON (!) è incluso
-    const medicoId = mediciDisponibiliId.find((m) => !mediciOccupati.includes(m));
-    if (!medicoId) {
-      setErrore("Nessun medico disponibile");
-      return false;
-    }
-
-    const risposta = await fetch(`${API_URL}/api/Appuntamenti`, {
-      method: "POST",
-      headers: createHeaders(true),
-      body: JSON.stringify({ data: dataFormattata, tipologiaVisitaId: tipologiaId, PazienteId: Number(idUtente), medicoId }),
-    });
-
-    if (risposta.ok) {
-      if (medicoSelezionatoId === "") {
-        return caricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
-      } else {
-        return caricaAppuntamentoPerMedico(medicoSelezionatoId ?? "");
-      }
-    }
-    if (!risposta.ok) {
-      setErrore(await risposta.text());
-      return false;
+  async function postMedico(e: React.SubmitEvent) {
+    e.preventDefault();
+    try {
+      await post(tipoLista, { ...form, username, password });
+      mostraListaUtenti(tipoLista);
+    } catch {
+      setErrore("Utente già esistente o dati non validi");
     }
   }
 
   async function putGenerico(percorso: string) {
-    const risposta = await fetch(`${API_URL}/api/${percorso}`, {
-      method: "PUT",
-      headers: createHeaders(true),
-      body: JSON.stringify(form),
-    });
-
-    if (risposta.ok) return true;
-    setErrore("Errore nella modifica");
-    return false;
+    try {
+      await put(percorso, form);
+      return true;
+    } catch {
+      setErrore("Errore nella modifica");
+      return false;
+    }
   }
 
   async function deleteGenerico(id: string) {
-    const risposta = await fetch(`${API_URL}/api/${id}`, {
-      method: "DELETE",
-      headers: createHeaders(false),
-    });
-
-    if (risposta.ok) return true;
-    setErrore("Errore nella cancellazione");
-    return false;
+    try {
+      await del(id);
+      return true;
+    } catch {
+      setErrore("Errore nell'eliminazione");
+      return false;
+    }
   }
 
   //useCallback: il componente mantiene la funzione tra un render e l'altro, ne crea una nuova solo se cambia una delle dipendenze ([])
   const caricaUser = useCallback(async () => {
     const dati = await getGenerico(`${rottaPerRuolo[ruolo]}/${utente?.id}`);
     setUser(dati);
-  }, [ruolo, getGenerico, utente?.id]);
+  }, [ruolo, utente?.id, getGenerico]);
 
   // useEffect è un hook di React, esegue un effetto collaterale (fetch, log ecc) dopo il render
   // l'array in fondo sono le dipendenze, l'effetto si riesegue solo quando uno di quei valori cambia
@@ -352,7 +243,7 @@ function AreaPersonale() {
     });
   }
 
-  function cambiaModalita(sezione: "listaUtenti" | "creaMedico") {
+  function cambiaModalita(sezione: "listaUtenti" | "postMedico") {
     setSezioneContent(sezione);
     setUsername("");
     setPassword("");
@@ -367,7 +258,7 @@ function AreaPersonale() {
   }
 
   async function mostraAnagrafica() {
-    caricaUser();
+    await caricaUser();
     setSezioneContent("anagrafica");
     setTipoLista(rottaPerRuolo[ruolo]);
   }
@@ -385,12 +276,6 @@ function AreaPersonale() {
     const datiTipologiaVisita = await getGenerico("TipologiaVisita");
     setTipologiaVisite(datiTipologiaVisita);
     return datiTipologiaVisita;
-  }
-
-  async function creaMedico(e: React.SubmitEvent) {
-    e.preventDefault();
-    const isSuccess = await postUtente();
-    if (isSuccess) mostraListaUtenti(tipoLista);
   }
 
   async function modificaAnagrafica(e: React.SubmitEvent) {
@@ -411,87 +296,6 @@ function AreaPersonale() {
     mostraListaUtenti(tipoLista);
   }
 
-  async function cancellaAppuntamento(giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) {
-    const appuntamentiCella =
-      appuntamenti?.filter((a) => {
-        const nuovaData = new Date(a.data);
-        return nuovaData.getHours() === ora && nuovaData.getFullYear() === giorno.getFullYear() && nuovaData.getMonth() === giorno.getMonth() && nuovaData.getDate() === giorno.getDate();
-      }) ?? [];
-
-    const appuntamentoPersonale = appuntamentiCella.find((x) => {
-      if (isPaziente || isNuovaPrenotazioneAdmin) return x.pazienteId === Number(idUtente);
-      if (isMedico) return x.medicoId === Number(idUtente);
-      if (isAdmin && tipoLista === "Pazienti") return x.pazienteId === Number(idUtente);
-      if (isAdmin && tipoLista === "Medici") return x.medicoId === Number(idUtente);
-      return false; // nessun caso combacia
-    });
-
-    if (appuntamentoPersonale) {
-      const risposta = await deleteGenerico("Appuntamenti/" + appuntamentoPersonale.id.toString());
-      if (risposta) {
-        if (isPaziente || (isAdmin && tipoLista === "Pazienti") || isNuovaPrenotazioneAdmin) {
-          if (medicoSelezionatoId === "") {
-            return caricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
-          } else {
-            return caricaAppuntamentoPerMedico(medicoSelezionatoId ?? "");
-          }
-        }
-      }
-
-      if (isMedico) caricaAppuntamentoPerMedico(idUtente ?? "");
-      if (isAdmin) caricaAppuntamentoPerMedico(idUtente ?? "");
-    }
-  }
-
-  async function cancellaAppuntamentoById(id: string) {
-    await deleteGenerico("Appuntamenti/" + id);
-    if (isPaziente || (isAdmin && (tipoLista === "Pazienti" || isNuovaPrenotazioneAdmin))) {
-      await caricaAppuntamentoPerPaziente(idUtente ?? "");
-    } else {
-      await caricaAppuntamentoPerMedico(idUtente ?? "");
-    }
-  }
-
-  async function caricaDisponibilitaPerMedico(id: string) {
-    const dati = await getGenerico(`DisponibilitaMedico/GetAllDays?medicoId=${id}`);
-    setDisponibilitaMedico(dati);
-  }
-  //chiamato dal paziente quando fa la ricerca per tipologia
-  async function caricaDisponibilitaPerTipologia(id: string) {
-    const dati = await getGenerico(`DisponibilitaMedico/GetByTipologia?tipologiaId=${id}`);
-    setDisponibilitaMedico(dati);
-  }
-  //chiamato dal paziente quando fa la ricerca su tendina
-  async function caricaMediciPerTipologia(id: string) {
-    const dati = await getGenerico(`DisponibilitaMedico/GetByTipologia?tipologiaId=${id}`);
-    setMediciTipologia(dati);
-  }
-  //chiamato dall'admin quando crea nuova prenotazione senza scegliere tipologia
-  async function caricaTuttiMedici() {
-    const dati = await getGenerico(`DisponibilitaMedico`);
-    setTuttiMedici(dati);
-  }
-  //chiamato dall'admin quando crea nuova prenotazione
-  async function caricaTuttiPazienti() {
-    const dati = await getGenerico("Pazienti");
-    setTuttiPazienti(dati);
-  }
-  //chiamato dal paziente quando fa la ricerca per tipologia
-  async function caricaAppuntamentoPerTipologia(id: string) {
-    const dati = await getGenerico(`Appuntamenti/GetByTipologia?tipologiaId=${id}`);
-    setAppuntamenti(dati);
-  }
-  //chiamato dal medico quando fa la ricerca per medicoId
-  async function caricaAppuntamentoPerMedico(id: string) {
-    const dati = await getGenerico(`Appuntamenti/GetByMedico?medicoId=${id}`);
-    setAppuntamenti(dati);
-  }
-  //chiamato dal paziente quando fa la ricerca
-  async function caricaAppuntamentoPerPaziente(id: string) {
-    const dati = await getGenerico(`Appuntamenti/GetByPaziente?pazienteId=${id}`);
-    setAppuntamenti(dati);
-  }
-
   async function mostraPrenotazioni(id: string) {
     if (isPaziente || (isAdmin && tipoLista === "Pazienti")) {
       await Promise.all([caricaAppuntamentoPerPaziente(id), caricaListaTipologiaVisita()]);
@@ -509,74 +313,6 @@ function AreaPersonale() {
     setSezioneContent("prenotazioni");
   }
 
-  function datiCella(giorno: Date, ora: number) {
-    //restituisce medicoId del medico disponibile in quel giorno e in quell'ora
-    const mediciDisponibiliId = disponibilitaMedico?.filter((d) => d.giorno === giorno.getDay() && Number.parseInt(d.oraInizio) === ora).map((x) => x.medicoId) ?? [];
-    //per ogni appuntamento fa una copia, filtra le copie per data, e poi ritorna solo quelli === alla nostra data
-    const appuntamentiCella =
-      appuntamenti?.filter((a) => {
-        const nuovaData = new Date(a.data);
-        return nuovaData.getHours() === ora && nuovaData.getFullYear() === giorno.getFullYear() && nuovaData.getMonth() === giorno.getMonth() && nuovaData.getDate() === giorno.getDate();
-      }) ?? [];
-    return { mediciDisponibiliId, appuntamentiCella };
-  }
-
-  function statoCellaPaziente(giorno: Date, ora: number): "mio" | "prenotabile" | "pieno" {
-    const { mediciDisponibiliId, appuntamentiCella } = datiCella(giorno, ora);
-    //controlla se negli appuntamenti c'è l'id paziente (some restituisce boolean)
-    //const mio = appuntamentiCella.some((x) => x.pazienteId === (isPaziente ? Number(utente?.id) : Number(utenteSelezionato?.id)));
-    const mio = appuntamentiCella.some((x) => x.pazienteId === Number(idUtente));
-    //estrae gli id dei medici occupati
-    const mediciOccupati = appuntamentiCella?.map((x) => x.medicoId);
-    //controlla se ne esiste almeno uno che NON (!) è incluso
-    const prenotabile = mediciDisponibiliId.some((m) => !mediciOccupati.includes(m));
-    if (mio) return "mio";
-    else if (prenotabile) return "prenotabile";
-    else return "pieno";
-  }
-
-  function statoCellaMedico(giorno: Date, ora: number): "prenotato" | "prenotabile" | "na" {
-    const { mediciDisponibiliId, appuntamentiCella } = datiCella(giorno, ora);
-    const medicoDisponibile = mediciDisponibiliId.includes(isMedico ? Number(utente?.id) : Number(utenteSelezionato?.id));
-    if (medicoDisponibile) {
-      //controlla se negli appuntamenti c'è l'id paziente (some restituisce boolean)
-      const prenotato = appuntamentiCella.some((x) => x.medicoId === (isMedico ? Number(utente?.id) : Number(utenteSelezionato?.id)));
-      if (prenotato) return "prenotato";
-      else return "prenotabile";
-    } else return "na";
-  }
-
-  async function gestisciCella(giorno: Date, ora: number) {
-    let ok;
-    const giornoDisponibile = oreDisponibiliDelGiorno(giorno.getDay()).includes(ora);
-    if (giornoDisponibile) {
-      const cella = disponibilitaMedico?.find((d) => d.giorno === giorno.getDay() && Number.parseInt(d.oraInizio) === ora);
-      if (cella !== undefined) {
-        ok = await deleteGenerico("DisponibilitaMedico/" + cella.id.toString());
-      }
-    } else if (!isPaziente) {
-      ok = await postDisponibilitaMedico(giorno.getDay(), ora);
-    }
-    //caricaDisponibilitaPerMedico solo se andato a buon fine
-    if (ok) await caricaDisponibilitaPerMedico(idUtente ?? "");
-  }
-
-  async function aggiungiPiuDisponibilita(giorno: number, oraInizio: number, oraFine: number) {
-    if (oraInizio > oraFine) {
-      setErrore("Inserire un range di orari valido");
-      return;
-    }
-    let ok = false;
-    for (let i = oraInizio; i <= oraFine; i++) {
-      const giornoDisponibile = oreDisponibiliDelGiorno(giorno).includes(i);
-      if (!giornoDisponibile) {
-        const esito = await postDisponibilitaMedico(giorno, i);
-        if (esito) ok = true; // una volta true, resta true
-      }
-    }
-    if (ok) await caricaDisponibilitaPerMedico(idUtente ?? "");
-  }
-
   function eseguiLogout() {
     localStorage.clear(); // o le singole removeItem
     setUtente(null);
@@ -592,7 +328,7 @@ function AreaPersonale() {
       {/* Profile Header */}
       <Header clickCards={() => setSezioneContent("contentCards")} nomeVisualizzato={nomeVisualizzato} clickLogout={eseguiLogout}></Header>
       {/* Main Content */}
-      <div className="d-flex flex-grow-1">
+      <div className="d-flex flex-column flex-lg-row flex-grow-1">
         {/* Sidebar */}
         <Sidebar sidebarChiusa={sidebarChiusa} clickToggleSidebar={toggleSidebar} vociSidebar={vociSidebar}></Sidebar>
         {/* Content Area */}
@@ -600,7 +336,7 @@ function AreaPersonale() {
           <div className="m-4">
             {sezioneContent === "contentCards" && (
               /* Cards */
-              <Cards vociSidebar={vociSidebar} colClass={colClass}></Cards>
+              <Cards vociSidebar={vociSidebar}></Cards>
             )}
             {sezioneContent === "listaUtenti" && (
               <ListaUtenti
@@ -622,12 +358,12 @@ function AreaPersonale() {
                 }}
               ></ListaUtenti>
             )}
-            {sezioneContent === "creaMedico" && (
+            {sezioneContent === "postMedico" && (
               <div className={` col-lg-6 mb-5 mb-lg-0 p-3 ${stylesShared.cardBorder}`}>
                 <div className=" card bg-body-tertiary">
                   <FormDatiUtente
                     titolo="Registra nuovo medico"
-                    submitUtente={(contenutoForm) => creaMedico(contenutoForm)}
+                    submitUtente={(contenutoForm) => postMedico(contenutoForm)}
                     form={form}
                     setForm={setForm}
                     isMostraServizi={true}
@@ -654,7 +390,7 @@ function AreaPersonale() {
             {sezioneContent === "anagrafica" && (
               /* Anagrafica */
               <div className="row g-0">
-                <div className={`col-6 p-3 ${stylesShared.cardBorder}`}>
+                <div className={`col-12 col-lg-6 p-3 ${stylesShared.cardBorder}`}>
                   <div className="card">
                     <div className={`card-header text-white ${styles.titleMedisport}`}>
                       <h5 className="m-2">Anagrafica</h5>
@@ -687,7 +423,7 @@ function AreaPersonale() {
                 onSettimanaPrecedente={settimanaPrecedente}
                 onSettimanaSuccessiva={settimanaSuccessiva}
                 grigliaOre={grigliaOre}
-                isGiornoDisponibile={(giorno, ora) => oreDisponibiliDelGiorno(giorno.getDay()).includes(ora)}
+                isGiornoDisponibile={(giorno, ora) => oreDisponibiliDelGiorno(giorno).includes(ora)}
                 onClickCasella={(giorno, ora) => gestisciCella(giorno, ora)}
                 onCaricaDisponibilitaPerTipologia={caricaDisponibilitaPerTipologia}
                 onCaricaDisponibilitaPerMedico={caricaDisponibilitaPerMedico}
@@ -722,9 +458,4 @@ function AreaPersonale() {
     </div>
   );
 }
-
-// ----------------- COMPONENTI -----------------
-// function Nome ({destructuring dei parametri. React passa le props}: Readonly<{tipo oggetto. TypeScript. Dopo : descrive la forma del parametro}>)
-
-
 export default AreaPersonale;

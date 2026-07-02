@@ -10,7 +10,6 @@ namespace IntelliMedi.API.Data
         public DbSet<Medico> Medici { get; set; }
         public DbSet<Amministratore> Amministratori { get; set; }
         public DbSet<Appuntamento> Appuntamenti { get; set; }
-        public DbSet<Recensione> Recensioni { get; set; }
         public DbSet<TipologiaVisita> TipologieVisita { get; set; }
         public DbSet<DisponibilitaMedico> DisponibilitaMedici { get; set; }
 

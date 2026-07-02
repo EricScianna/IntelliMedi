@@ -10,5 +10,7 @@
         public DayOfWeek Giorno { get; set; }
         public TimeOnly OraInizio { get; set; }
         public TimeOnly OraFine { get; set; }
+        public DateOnly? Data { get; set; }
+        public bool Disponibile { get; set; } 
     }
 }

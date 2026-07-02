@@ -26,6 +26,8 @@ export interface DisponibilitaMedico {
   giorno: number;
   oraInizio: string;
   oraFine: string;
+  data?: string | null;
+  disponibile: boolean;
 }
 
 export interface Appuntamento {

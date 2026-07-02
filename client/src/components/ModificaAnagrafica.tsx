@@ -1,3 +1,4 @@
+import { SESSO_LABELS } from "../constants";
 import type { DatiForm, TipologiaVisita } from "../types";
 
 function ModificaAnagrafica({
@@ -74,9 +75,11 @@ function ModificaAnagrafica({
               <th scope="row">Sesso</th>
               <td>
                 <select id="Sesso" className="form-select" value={form?.sesso} onChange={(e) => setForm({ ...form, sesso: Number(e.target.value) })} required>
-                  <option value="0">Maschio</option>
-                  <option value="1">Femmina</option>
-                  <option value="2">Non specificato</option>
+                  {SESSO_LABELS.map((label, index) => (
+                    <option key={label} value={index}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
               </td>
             </tr>

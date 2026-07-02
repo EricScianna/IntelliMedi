@@ -1,5 +1,13 @@
 import type { Appuntamento } from "../types";
-import styles from "../pages/AreaPersonale.module.css";
+import styles from "../styles/areaRiservata.module.css";
+
+function formattaData(dataIso: string) {
+  const d = new Date(dataIso);
+  return {
+    giorno: d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    ora: d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
 
 function TabellaAppuntamenti({
   intestazioneControparte,
@@ -29,21 +37,20 @@ function TabellaAppuntamenti({
         </tr>
       </thead>
       <tbody>
-        {appuntamenti
-          ?.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
+        {[...(appuntamenti ?? [])]
+          .sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
           .map((appuntamento) => {
             const { giorno, ora } = formattaData(appuntamento.data);
             return (
               <tr key={appuntamento.id}>
                 <td className="ps-4">{appuntamento.tipologiaVisita}</td>
-                {(isPaziente || (isAdmin && tipoLista === "Pazienti")) && <td>{`${appuntamento.medicoNome} ${appuntamento.medicoCognome}`}</td>}
-                {(isMedico || (isAdmin && tipoLista === "Medici")) && <td>{`${appuntamento.pazienteNome} ${appuntamento.pazienteCognome}`}</td>}
+                <td>{valoreControparte(appuntamento)}</td>
                 <td>{giorno}</td>
                 <td>{ora}</td>
                 <td>
                   <ul className="list-inline m-0">
                     <li className="list-inline-item position-relative">
-                      <button className={`btn px-2 text-danger`} title="Cancella" onClick={onCancella(appuntamento.id)}>
+                      <button className={`btn px-2 text-danger`} title="Cancella" onClick={() => onCancella(appuntamento.id)}>
                         <i className="bi bi-trash font-size-18"></i>
                       </button>
                     </li>

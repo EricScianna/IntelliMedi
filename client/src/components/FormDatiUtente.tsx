@@ -1,3 +1,4 @@
+import { SESSO_LABELS } from "../constants";
 import type { DatiForm, TipologiaVisita } from "../types";
 
 function FormDatiUtente({
@@ -45,9 +46,11 @@ function FormDatiUtente({
           <div className="col-md-4 mb-4">
             <div className="form-floating">
               <select className="form-select" id="sesso" value={form.sesso} onChange={(e) => setForm({ ...form, sesso: Number.parseInt(e.target.value) })} required>
-                <option value="0">Maschio</option>
-                <option value="1">Femmina</option>
-                <option value="2">Non specificato</option>
+                {SESSO_LABELS.map((label, index) => (
+                  <option key={label} value={index}>
+                    {label}
+                  </option>
+                ))}
               </select>
               <label htmlFor="sesso">Sesso</label>
             </div>
@@ -62,7 +65,7 @@ function FormDatiUtente({
           </div>
           <div className="col-md-4 mb-4">
             <div className="form-floating">
-              <input type="text" id="CodiceFiscale" className="form-control" value={form.codiceFiscale} onChange={(e) => setForm({ ...form, codiceFiscale: e.target.value })} required/>
+              <input type="text" id="CodiceFiscale" className="form-control" value={form.codiceFiscale} onChange={(e) => setForm({ ...form, codiceFiscale: e.target.value })} required />
               <label htmlFor="CodiceFiscale">Codice fiscale</label>
             </div>
           </div>

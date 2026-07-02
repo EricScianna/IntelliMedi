@@ -19,7 +19,7 @@
 
 .sidebar {
   position: relative;
-  width: 15%;
+  width: 300px;
   border-radius: 0px 10px 10px 0px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   background: linear-gradient(160deg, #08808e 0%, #08808e 40%, #16181f 120%);
@@ -27,12 +27,12 @@
 }
 
 :global(.collapsed).sidebar {
-  width: 7%;
+  width: 130px;
 }
 
 .sidebarLink {
   margin: 4px 16px;
-  white-space: nowrap;
+  white-space: normal;
   overflow: hidden;
   border-radius: 8px;
   color: #ffffffd7;
@@ -157,4 +157,46 @@
 
 .w20 {
   width: 20% !important;
+}
+
+@media (max-width: 991.98px) {
+  .sidebar,
+  :global(.collapsed).sidebar {
+    width: 100%;
+  }
+
+  .sidebarLink {
+    white-space: normal;
+  } /* "Nuova Prenotazione" può spezzarsi su due righe */
+}
+
+@media (max-width: 991.98px) {
+  .cardTable thead {
+    display: none;
+  } /* via l'intestazione */
+  .cardTable,
+  .cardTable tbody,
+  .cardTable tr {
+    display: block;
+  }
+  .cardTable tr {
+    /* ogni riga = una card */
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    background: #fff;
+    padding: 0.5rem 0.75rem;
+  }
+  .cardTable td {
+    /* ogni cella = "etichetta: valore" */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: none;
+    padding: 0.35rem 0.5rem;
+  }
+  .cardTable td::before {
+    content: attr(data-label); /* ← il trucco */
+    font-weight: 600;
+    margin-right: 1rem;
+  }
 }

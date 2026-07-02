@@ -1,4 +1,4 @@
-import styles from "../pages/AreaPersonale.module.css";
+import styles from "../styles/areaRiservata.module.css";
 import stylesShared from "../shared.module.css";
 import { useState } from "react";
 import { SESSO_LABELS } from "../constants";
@@ -60,10 +60,10 @@ function ListaUtenti({
             <div className="col-lg-12">
               <div className="">
                 <div className="table-responsive">
-                  <table className={`table ${styles.projectListTable} ${styles.projectListTableColor} align-middle table-borderless m-0 `}>
+                  <table className={`table align-middle table-borderless m-0 ${styles.projectListTable} ${styles.projectListTableColor} ${styles.cardTable}`}>
                     <thead>
                       <tr>
-                        <th scope="col" className={`${styles.w15} ps-4`}>
+                        <th scope="col" className={`${styles.w15} ps-lg-4`}>
                           Nome
                         </th>
                         <th className={`${styles.w15}`} scope="col">
@@ -91,19 +91,21 @@ function ListaUtenti({
                     <tbody>
                       {usersPagina?.map((user) => (
                         <tr key={user.id}>
-                          <td className="ps-4">{user.nome}</td>
-                          <td>{user.cognome}</td>
-                          {tipologiaServizio && <td>{user.tipologiaVisite?.[0]?.descrizione ?? "N/A"}</td>}
-                          <td>
+                          <td className="ps-lg-4" data-label="Nome">
+                            {user.nome}
+                          </td>
+                          <td data-label="Cognome">{user.cognome}</td>
+                          {tipologiaServizio && <td data-label="Servizi">{user.tipologiaVisite?.[0]?.descrizione ?? "N/A"}</td>}
+                          <td data-label="Data di Nascita">
                             {new Date(user.dataNascita).toLocaleDateString("it-IT", {
                               day: "2-digit",
                               month: "2-digit",
                               year: "numeric",
                             })}
                           </td>
-                          <td>{SESSO_LABELS[user.sesso]}</td>
-                          <td>{user.codiceFiscale ?? "N/A"}</td>
-                          <td>
+                          <td data-label="Sesso">{SESSO_LABELS[user.sesso]}</td>
+                          <td data-label="Codice Fiscale">{user.codiceFiscale ?? "N/A"}</td>
+                          <td data-label="Gestione">
                             <ul className="list-inline m-0">
                               {onModificaInLista && (
                                 <li className="list-inline-item">

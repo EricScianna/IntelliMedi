@@ -23,6 +23,8 @@ namespace IntelliMedi.API.Controllers
             Giorno = a.Giorno,
             OraInizio = a.OraInizio,
             OraFine = a.OraFine,
+            Data = a.Data,
+            Disponibile = a.Disponibile,
         };
         public DisponibilitaMedicoController(AppDbContext context)
         {
@@ -82,7 +84,9 @@ namespace IntelliMedi.API.Controllers
                 Giorno = registrazione.Giorno,
                 MedicoId = registrazione.MedicoId,
                 OraInizio = registrazione.OraInizio,
-                OraFine = registrazione.OraFine
+                OraFine = registrazione.OraFine,
+                Data = registrazione.Data,
+                Disponibile = registrazione.Disponibile,
             };
             _context.DisponibilitaMedici.Add(disponibilitaMedico);
             await _context.SaveChangesAsync();
