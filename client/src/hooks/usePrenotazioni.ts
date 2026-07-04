@@ -40,13 +40,22 @@ export function usePrenotazioni({
   const [tuttiMedici, setTuttiMedici] = useState<DisponibilitaMedico[] | null>(null);
   const [tuttiPazienti, setTuttiPazienti] = useState<User[] | null>(null);
 
+  const latoPaziente = isPaziente || (isAdmin && (tipoLista === "Pazienti" || isNuovaPrenotazioneAdmin));
   const idUtenteInt = Number(idUtente);
-  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) {
-    const dataFormattata = dataISO(giorno) + "T" + oraAppuntamento.toString().padStart(2, "0") + ":00:00";
 
+  /**
+   *
+   * @param giorno
+   * @param oraAppuntamento
+   * @param tipologiaSelezionataId
+   * @param medicoSelezionatoId
+   * @returns
+   */
+  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null): Promise<boolean> {
+    //cerca fra tutti i medici se quello scelto esiste. può essere null perché il paziente potrebbe aver scelto la tipologia e non il medico
     const medicoScelto = tuttiMedici?.find((m) => m.medicoId === Number(medicoSelezionatoId));
+    //ricava tipologiaId dalla tipololgia, se l'utente l'ha scelta, oppure da un medico
     const tipologiaId = tipologiaSelezionataId ? Number(tipologiaSelezionataId) : medicoScelto?.tipologiaVisitaId;
-
     if (!tipologiaId) {
       setErrore("Seleziona un servizio o un medico");
       return false;
@@ -62,9 +71,12 @@ export function usePrenotazioni({
       return false;
     }
 
+    const dataFormattata = dataISO(giorno) + "T" + oraAppuntamento.toString().padStart(2, "0") + ":00:00";
     try {
       await post("Appuntamenti", { data: dataFormattata, tipologiaVisitaId: tipologiaId, PazienteId: idUtenteInt, medicoId });
-      return medicoSelezionatoId === "" ? await caricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "") : await caricaAppuntamentoPerMedico(medicoSelezionatoId ?? "");
+      if (medicoSelezionatoId === "") await caricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
+      else await caricaAppuntamentoPerMedico(medicoSelezionatoId ?? "");
+      return true;
     } catch (e) {
       setErrore(e instanceof Error ? e.message : "Errore nella prenotazione");
       return false;
@@ -114,6 +126,7 @@ export function usePrenotazioni({
       setErrore("Inserire un range di orari valido");
       return;
     }
+
     let ok = false;
     for (let i = oraInizio; i <= oraFine; i++) {
       const giornoDisponibile = disponibilitaMedico?.some((d) => d.data == null && d.giorno === giorno && Number.parseInt(d.oraInizio) === i) ?? false;
@@ -125,33 +138,30 @@ export function usePrenotazioni({
     if (ok) await caricaDisponibilitaPerMedico(idUtente ?? "");
   }
 
-  async function cancellaAppuntamento(giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) {
+  async function cancellaAppuntamento(giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null): Promise<boolean> {
     const { appuntamentiCella } = datiCella(giorno, ora);
-
-    const latoPaziente = isPaziente || isNuovaPrenotazioneAdmin || (isAdmin && tipoLista === "Pazienti");
-
     const appuntamentoPersonale = appuntamentiCella.find((x) => {
       return latoPaziente ? x.pazienteId === idUtenteInt : x.medicoId === idUtenteInt;
     });
-    if (appuntamentoPersonale) {
-      const risposta = await deleteGenerico("Appuntamenti/" + appuntamentoPersonale.id.toString());
-      if (!risposta) return false;
-      if (latoPaziente) {
-        if (medicoSelezionatoId === "") return caricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
-        else return await caricaAppuntamentoPerMedico(medicoSelezionatoId ?? "");
-      }
-      return await caricaAppuntamentoPerMedico(idUtente ?? "");
-    }
+    if (!appuntamentoPersonale) return false;
+
+    const risposta = await deleteGenerico("Appuntamenti/" + appuntamentoPersonale.id.toString());
+    if (!risposta) return false;
+
+    if (latoPaziente) {
+      if (medicoSelezionatoId === "") await caricaAppuntamentoPerTipologia(tipologiaSelezionataId ?? "");
+      else await caricaAppuntamentoPerMedico(medicoSelezionatoId ?? "");
+    } else await caricaAppuntamentoPerMedico(idUtente ?? "");
+
+    return true;
   }
 
   function datiCella(giorno: Date, ora: number) {
     const data = dataISO(giorno);
     const oraMatch = (d: DisponibilitaMedico) => Number.parseInt(d.oraInizio) === ora;
-
     // medici che hanno un'eccezione (non disponibili) per questo giorno/ora
     const mediciConEccezione = new Set(disponibilitaMedico?.filter((d) => !d.disponibile && d.data === data && oraMatch(d)).map((d) => d.medicoId) ?? []);
     const mediciDisponibiliId = disponibilitaMedico?.filter((d) => d.disponibile && coincideCol(d, giorno) && oraMatch(d) && !mediciConEccezione.has(d.medicoId)).map((x) => x.medicoId) ?? [];
-
     //per ogni appuntamento fa una copia, filtra le copie per data, e poi ritorna solo quelli === alla nostra data
     const appuntamentiCella =
       appuntamenti?.filter((a) => {
@@ -163,11 +173,8 @@ export function usePrenotazioni({
 
   async function cancellaAppuntamentoById(id: string) {
     await deleteGenerico("Appuntamenti/" + id);
-    if (isPaziente || (isAdmin && (tipoLista === "Pazienti" || isNuovaPrenotazioneAdmin))) {
-      await caricaAppuntamentoPerPaziente(idUtente ?? "");
-    } else {
-      await caricaAppuntamentoPerMedico(idUtente ?? "");
-    }
+    if (latoPaziente) await caricaAppuntamentoPerPaziente(idUtente ?? "");
+    else await caricaAppuntamentoPerMedico(idUtente ?? "");
   }
 
   async function caricaDisponibilitaPerMedico(id: string) {
