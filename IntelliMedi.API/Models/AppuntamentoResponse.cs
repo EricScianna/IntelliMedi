@@ -12,6 +12,5 @@
         public string PazienteNome { get; set; }
         public string PazienteCognome { get; set; }
         public string TipologiaVisita { get; set; }
-        public string? Descrizione { get; set; }
     }
 }

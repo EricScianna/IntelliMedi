@@ -1,14 +1,14 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import styles from "./Login.module.css";
 import logo from "../assets/logo3.png";
 import type { DatiForm } from "../types";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { FORM_VUOTO } from "../constants";
 import { useErrore } from "../hooks/useErrore";
-import FormDatiUtente from "../components/FormDatiUtente";
-import Avvisi from "../components/Avvisi";
 import { useUtente } from "../context/UtenteContext";
 import { post } from "../api";
+import FormDatiUtente from "../components/FormDatiUtente";
+import Avvisi from "../components/Avvisi";
 
 function Login() {
   const { setUtente } = useUtente();
@@ -39,8 +39,8 @@ function Login() {
 
       setUtente({ id: String(dati.utente.id), ruolo: dati.utente.ruolo, nome: dati.utente.nome, cognome: dati.utente.cognome });
       navigate("/area-personale");
-    } catch {
-      setErrore("Username o password non corretti");
+    } catch (e) {
+      setErrore(e instanceof Error ? e.message : "Username o password non corretti");
     }
   }
 
@@ -49,8 +49,8 @@ function Login() {
     try {
       await post("Pazienti", { ...form, username, password });
       await postLogin(e);
-    } catch {
-      setErrore("Username o password non corretti");
+    } catch (e) {
+      setErrore(e instanceof Error ? e.message : "Errore nella prenotazione");
     }
   }
 
@@ -83,7 +83,6 @@ function Login() {
                         </button>
                       </p>
                     </div>
-                    {errore && <Avvisi errore={errore} clickChiudi={() => setErrore("")} />}
                   </form>
                 </div>
               )}

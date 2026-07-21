@@ -10,7 +10,7 @@ function ConfermaEliminazione({ mostra, messaggio, onConferma, onAnnulla }: Read
               <button type="button" className="btn-close" onClick={onAnnulla}></button>
             </div>
             <div className="modal-body">
-              <p className="m-0">{messaggio}</p>
+              <p className="m-0" style={{ whiteSpace: "pre-line" }}>{messaggio}</p>
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={onAnnulla}>

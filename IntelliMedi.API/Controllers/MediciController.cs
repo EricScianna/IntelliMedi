@@ -40,9 +40,8 @@ namespace IntelliMedi.API.Controllers
         [Authorize(Roles = "Amministratore")]
         public async Task<ActionResult<Medico>> Create(RegistrazioneRequest registrazione)
         {
-            if (_context.Medici.Any(p => p.Username == registrazione.Username))
-                return BadRequest();
-
+            if ((_context.Pazienti.Any(p => p.Username == registrazione.Username)) || (_context.Medici.Any(p => p.Username == registrazione.Username)) || (_context.Amministratori.Any(p => p.Username == registrazione.Username)))
+                return BadRequest("Username già registrato");
             if (_context.Medici.Any(p => p.CodiceFiscale == registrazione.CodiceFiscale))
                 return BadRequest("Codice fiscale già registrato");
 

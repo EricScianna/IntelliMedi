@@ -1,5 +1,5 @@
 import styles from "../styles/areaRiservata.module.css";
-import stylesShared from "../shared.module.css";
+import stylesShared from "../styles/shared.module.css";
 import type { VoceMenu } from "../types";
 
 function Cards({ vociSidebar }: Readonly<{ vociSidebar: VoceMenu[] }>) {

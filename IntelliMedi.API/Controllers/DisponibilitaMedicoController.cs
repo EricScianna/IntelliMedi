@@ -1,4 +1,5 @@
 ﻿using IntelliMedi.API.Data;
+using IntelliMedi.API.Extensions;
 using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -34,6 +35,7 @@ namespace IntelliMedi.API.Controllers
         //ASP.NET ha bisogno di decoratori diversi per richiamare il giusto metodo
         //l'URL sarà: GET /api/DisponibilitaMedico/GetByTipologia?tipologiaId=
         [HttpGet("GetByTipologia")]
+        [Authorize(Roles = "Amministratore,Paziente")]
         public async Task<ActionResult<IEnumerable<DisponibilitaMedicoResponse>>> GetByTipologia(int tipologiaId)
         {
             //LINQ usa where per filtrare gli elementi di disponibilitaMedici con:
@@ -49,6 +51,7 @@ namespace IntelliMedi.API.Controllers
         [HttpGet("GetAllDays")]
         public async Task<ActionResult<IEnumerable<DisponibilitaMedicoResponse>>> GetAllDays(int medicoId)
         {
+            if (User.IsInRole("Medico") && (User.IdUtenteLoggato() != medicoId)) return Forbid();
             //LINQ usa where per filtrare gli elementi di disponibilitaMedici con:
             //MedicoId uguale a quello del medico ricevuto
             return await _context.DisponibilitaMedici
@@ -59,6 +62,7 @@ namespace IntelliMedi.API.Controllers
 
         //restituisce tutti i medici che hanno disponibilità
         [HttpGet]
+        [Authorize(Roles = "Amministratore")]
         public async Task<ActionResult<IEnumerable<DisponibilitaMedicoResponse>>> GetAll()
         {
             return await _context.DisponibilitaMedici
@@ -66,19 +70,12 @@ namespace IntelliMedi.API.Controllers
                 .ToListAsync();
         }
 
-        [HttpGet("{id}")]
-        public async Task<ActionResult<DisponibilitaMedico>> GetById(int id)
-        {
-            var disponibilitaMedico = await _context.DisponibilitaMedici.FindAsync(id);
-            if (disponibilitaMedico == null)
-                return NotFound();
-
-            return disponibilitaMedico;
-        }
-
         [HttpPost]
+        [Authorize(Roles = "Amministratore,Medico")]
         public async Task<IActionResult> Create(DisponibilitaMedicoRequest registrazione)
         {
+            if (User.IsInRole("Medico") && (User.IdUtenteLoggato() != registrazione.MedicoId)) return Forbid();
+            if (registrazione.OraInizio >= registrazione.OraFine) return BadRequest("L'orario di inizio deve precedere l'orario di fine");
             DisponibilitaMedico disponibilitaMedico = new()
             {
                 Giorno = registrazione.Giorno,
@@ -90,18 +87,26 @@ namespace IntelliMedi.API.Controllers
             };
             _context.DisponibilitaMedici.Add(disponibilitaMedico);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetById), new { id = disponibilitaMedico.Id }, disponibilitaMedico);
+            return Created();
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Amministratore,Medico")]
         public async Task<IActionResult> Delete(int id)
         {
-            var existingDisponibilitaMedico = await _context.DisponibilitaMedici.FindAsync(id);
+            DisponibilitaMedico? existingDisponibilitaMedico;
+            if (User.IsInRole("Amministratore"))
+                existingDisponibilitaMedico = await _context.DisponibilitaMedici.FindAsync(id);
+            else
+            {
+                int idUtenteLoggato = User.IdUtenteLoggato();
+                existingDisponibilitaMedico = await _context.DisponibilitaMedici.FirstOrDefaultAsync(m => m.Id == id && m.MedicoId == idUtenteLoggato);
+            }
+
             if (existingDisponibilitaMedico == null)
                 return NotFound();
 
             _context.DisponibilitaMedici.Remove(existingDisponibilitaMedico);
-
             await _context.SaveChangesAsync();
             return NoContent();
         }

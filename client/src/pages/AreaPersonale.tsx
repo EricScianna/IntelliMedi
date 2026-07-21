@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "../styles/areaRiservata.module.css";
-import stylesShared from "../shared.module.css";
+import stylesShared from "../styles/shared.module.css";
 import type { DatiForm, TipologiaVisita, User, VoceMenu } from "../types";
 import { FORM_VUOTO } from "../constants";
 import { useErrore } from "../hooks/useErrore";
@@ -165,7 +165,8 @@ function AreaPersonale() {
     mediciTipologia,
     tuttiMedici,
     tuttiPazienti,
-    caricaAppuntamentoPerTipologia,
+    caricaCalendarioPerTipologia,
+    caricaCalendarioPerMedico,
     caricaAppuntamentoPerMedico,
     caricaAppuntamentoPerPaziente,
     caricaDisponibilitaPerMedico,
@@ -435,8 +436,8 @@ function AreaPersonale() {
                 onPrenota={postAppuntamento}
                 onDisdici={cancellaAppuntamento}
                 onDisdiciById={cancellaAppuntamentoById}
-                onCaricaAppuntamentoPerTipologia={caricaAppuntamentoPerTipologia}
-                onCaricaAppuntamentoPerMedico={caricaAppuntamentoPerMedico}
+                onCaricaCalendarioPerMedico={caricaCalendarioPerMedico}
+                onCaricaCalendarioPerTipologia={caricaCalendarioPerTipologia}
                 statoCellaPaziente={(giorno, ora) => statoCellaPaziente(giorno, ora)}
                 statoCellaMedico={(giorno, ora) => statoCellaMedico(giorno, ora)}
                 utenteSelezionato={utenteSelezionato}

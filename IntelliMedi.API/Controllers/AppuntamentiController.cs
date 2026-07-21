@@ -1,4 +1,5 @@
 ﻿using IntelliMedi.API.Data;
+using IntelliMedi.API.Extensions;
 using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,12 +32,65 @@ namespace IntelliMedi.API.Controllers
         {
             _context = context;
         }
+        [HttpGet("CalendarioPerTipologia")]
+        [Authorize(Roles = "Amministratore,Paziente")]
+        public async Task<ActionResult<IEnumerable<CalendarioResponse>>> CalendarioPerTipologia(int tipologiaId, int? pazienteId)
+        {
+            if (User.IsInRole("Paziente") && (User.IdUtenteLoggato() != pazienteId)) return Forbid();
+            if (pazienteId == null) return BadRequest("Selezionare un paziente");
+
+            int pazienteRiferimento;
+            if (User.IsInRole("Paziente"))
+                pazienteRiferimento = User.IdUtenteLoggato();
+            else
+                pazienteRiferimento = pazienteId.Value;
+
+            return await _context.Appuntamenti
+            .Where(d => d.Medico.TipologiaVisite
+            .Any(x => x.Id == tipologiaId))
+            .Select(t => new CalendarioResponse
+            {
+                Mio = t.PazienteId == pazienteRiferimento,
+                Id = t.PazienteId == pazienteRiferimento ? t.Id : null,
+                Data = t.Data,
+                MedicoId = t.MedicoId
+            })
+            .ToListAsync();
+        }
+
+        [HttpGet("CalendarioPerMedico")]
+        [Authorize(Roles = "Amministratore,Paziente")]
+        public async Task<ActionResult<IEnumerable<CalendarioResponse>>> CalendarioPerMedico(int medicoId, int? pazienteId)
+        {
+            if (User.IsInRole("Paziente") && (User.IdUtenteLoggato() != pazienteId)) return Forbid();
+            if (pazienteId == null) return BadRequest("Selezionare un paziente");
+
+            int pazienteRiferimento;
+            if (User.IsInRole("Paziente"))
+                pazienteRiferimento = User.IdUtenteLoggato();
+            else
+                pazienteRiferimento = pazienteId.Value;
+
+            return await _context.Appuntamenti
+            .Where(d => d.MedicoId == medicoId)
+            .Select(t => new CalendarioResponse
+            {
+                Mio = t.PazienteId == pazienteRiferimento,
+                Id = t.PazienteId == pazienteRiferimento ? t.Id : null,
+                Data = t.Data,
+                MedicoId = t.MedicoId
+            })
+            .ToListAsync();
+        }
 
         [HttpGet("GetByPaziente")]
+        [Authorize(Roles = "Amministratore,Paziente")]
         public async Task<ActionResult<IEnumerable<AppuntamentoResponse>>> GetByPaziente(int pazienteId)
         {
+            if (User.IsInRole("Paziente") && (User.IdUtenteLoggato() != pazienteId)) return Forbid();
+
             //LINQ usa where per filtrare gli elementi di appuntamenti con:
-            //medicoId uguale a quella ricevuta
+            //pazienteId uguale a quella ricevuta
             return await _context.Appuntamenti
             .Where(d => d.PazienteId == pazienteId)
             .Select(ProiezioneResponse)
@@ -44,8 +98,11 @@ namespace IntelliMedi.API.Controllers
         }
 
         [HttpGet("GetByMedico")]
+        [Authorize(Roles = "Amministratore,Medico")]
         public async Task<ActionResult<IEnumerable<AppuntamentoResponse>>> GetByMedico(int medicoId)
         {
+            if (User.IsInRole("Medico") && (User.IdUtenteLoggato() != medicoId)) return Forbid();
+
             //LINQ usa where per filtrare gli elementi di appuntamenti con:
             //medicoId uguale a quella ricevuta
             return await _context.Appuntamenti
@@ -54,31 +111,14 @@ namespace IntelliMedi.API.Controllers
             .ToListAsync();
         }
 
-        [HttpGet("GetByTipologia")]
-        public async Task<ActionResult<IEnumerable<AppuntamentoResponse>>> GetByTipologia(int tipologiaId)
-        {
-            //LINQ usa where per filtrare gli elementi di appuntamenti con:
-            //tipologiaId uguale a quella ricevuta
-            return await _context.Appuntamenti
-            .Where(d => d.Medico.TipologiaVisite
-            .Any(x => x.Id == tipologiaId))
-            .Select(ProiezioneResponse)
-            .ToListAsync();
-        }
-
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Appuntamento>> GetById(int id)
-        {
-            var appuntamento = await _context.Appuntamenti.FindAsync(id);
-            if (appuntamento == null)
-                return NotFound();
-
-            return appuntamento;
-        }
-
         [HttpPost]
+        [Authorize(Roles = "Amministratore,Paziente")]
         public async Task<IActionResult> Create(AppuntamentoRequest registrazione)
         {
+            if (registrazione.Data < DateTime.Now) return BadRequest("Non è possibile prenotare su una data passata");
+            if (User.IsInRole("Paziente") && (User.IdUtenteLoggato() != registrazione.PazienteId)) return Forbid();
+            if (!await _context.TipologieVisita.AnyAsync(d => d.Id == registrazione.TipologiaVisitaId && d.Medici.Any(x => x.Id == registrazione.MedicoId))) return BadRequest("Il medico selezionato non esercita la tipologia richiesta");
+
             //lo slot rientra nella disponibilità di quel medico? (giorno-settimana + ora);
             var disponibilita = await _context.DisponibilitaMedici.Where(d => d.MedicoId == registrazione.MedicoId).ToListAsync();
 
@@ -112,15 +152,29 @@ namespace IntelliMedi.API.Controllers
 
             _context.Appuntamenti.Add(appuntamento);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetById), new { id = appuntamento.Id }, appuntamento);
+            return Created();
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var existingAppuntamento = await _context.Appuntamenti.FindAsync(id);
+            Appuntamento? existingAppuntamento;
+            if (User.IsInRole("Amministratore"))
+                existingAppuntamento = await _context.Appuntamenti.FindAsync(id);
+            else if (User.IsInRole("Medico"))
+            {
+                int idUtenteLoggato = User.IdUtenteLoggato();
+                existingAppuntamento = await _context.Appuntamenti.FirstOrDefaultAsync(m => m.Id == id && m.MedicoId == idUtenteLoggato);
+            }
+            else
+            {
+                int idUtenteLoggato = User.IdUtenteLoggato();
+                existingAppuntamento = await _context.Appuntamenti.FirstOrDefaultAsync(m => m.Id == id && m.PazienteId == idUtenteLoggato);
+            }
+
             if (existingAppuntamento == null)
                 return NotFound();
+
 
             _context.Appuntamenti.Remove(existingAppuntamento);
 

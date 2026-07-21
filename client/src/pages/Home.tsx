@@ -1,3 +1,4 @@
+import styles from "./Home.module.css";
 import { useState, useEffect } from "react";
 import logo from "../assets/logo.png";
 import carousel1 from "../assets/carousel-1-1-1920x800.jpg";
@@ -6,7 +7,6 @@ import carousel3 from "../assets/carousel-3-1-1920x800.png";
 import carousel4 from "../assets/carousel-4-1-1920x800.jpg";
 import carousel5 from "../assets/carousel-5-1-1920x800.jpg";
 import chiSiamo from "../assets/chi-siamo-home-720x415.png";
-import styles from "./Home.module.css";
 import { useNavigate } from "react-router-dom";
 
 const servizi = ["Medicina sportiva", "Ortopedia", "Nutrizione", "Cardiologia", "Psicologia", "Fisioterapia", "Holter cardiaco", "Onde d'urto"];

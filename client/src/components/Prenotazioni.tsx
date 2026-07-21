@@ -1,5 +1,5 @@
 import styles from "../styles/areaRiservata.module.css";
-import stylesShared from "../shared.module.css";
+import stylesShared from "../styles/shared.module.css";
 import { useState } from "react";
 import { GIORNI_SETTIMANA } from "../constants";
 import { useUtente } from "../context/UtenteContext";
@@ -25,8 +25,8 @@ function Prenotazioni({
   onPrenota,
   onDisdici,
   onDisdiciById,
-  onCaricaAppuntamentoPerTipologia,
-  onCaricaAppuntamentoPerMedico,
+  onCaricaCalendarioPerMedico,
+  onCaricaCalendarioPerTipologia,
   appuntamenti,
   statoCellaPaziente,
   statoCellaMedico,
@@ -57,8 +57,8 @@ function Prenotazioni({
   onPrenota: (giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) => void;
   onDisdici: (giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) => void;
   onDisdiciById: (tipologiaSelezionataId: string) => void;
-  onCaricaAppuntamentoPerTipologia: (id: string) => Promise<void>;
-  onCaricaAppuntamentoPerMedico: (id: string) => Promise<void>;
+  onCaricaCalendarioPerMedico: (id: string) => Promise<void>;
+  onCaricaCalendarioPerTipologia: (id: string) => Promise<void>;
   appuntamenti: Appuntamento[] | null;
   statoCellaPaziente: (giorno: Date, ora: number) => string;
   statoCellaMedico: (giorno: Date, ora: number) => string;
@@ -138,9 +138,9 @@ function Prenotazioni({
 
   async function inviaNuovaPrenotazione() {
     if (medicoSelezionatoId === "") {
-      await Promise.all([onCaricaDisponibilitaPerTipologia(tipologiaSelezionataId), onCaricaAppuntamentoPerTipologia(tipologiaSelezionataId)]);
+      await Promise.all([onCaricaDisponibilitaPerTipologia(tipologiaSelezionataId), onCaricaCalendarioPerTipologia(tipologiaSelezionataId)]);
     } else {
-      await Promise.all([onCaricaDisponibilitaPerMedico(medicoSelezionatoId), onCaricaAppuntamentoPerMedico(medicoSelezionatoId)]);
+      await Promise.all([onCaricaDisponibilitaPerMedico(medicoSelezionatoId), onCaricaCalendarioPerMedico(medicoSelezionatoId)]);
     }
     setSezionePrenotazioni("nuovaPrenotazioneCalendario");
   }

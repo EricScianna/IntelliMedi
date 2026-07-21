@@ -29,25 +29,16 @@ namespace IntelliMedi.API.Controllers
                 .ToListAsync();
         }
 
-        [HttpGet("{id}")]
-        public async Task<ActionResult<TipologiaVisita>> GetById(int id)
-        {
-            var tipologiaVisita = await _context.TipologieVisita.FindAsync(id);
-            if (tipologiaVisita == null)
-                return NotFound();
-
-            return tipologiaVisita;
-        }
-
         [HttpPost]
+        [Authorize(Roles = "Amministratore")]
         public async Task<IActionResult> Create(TipologiaVisita tipologiaVisita)
         {
             _context.TipologieVisita.Add(tipologiaVisita);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetById), new { id = tipologiaVisita.Id }, tipologiaVisita);
+            return Created();
         }
-
         [HttpPut("{id}")]
+        [Authorize(Roles = "Amministratore")]
         public async Task<IActionResult> Update(int id, TipologiaVisita tipologiaVisita)
         {
             if (id != tipologiaVisita.Id)
@@ -58,13 +49,12 @@ namespace IntelliMedi.API.Controllers
                 return NotFound();
 
             existingTipologiaVisita.Descrizione = tipologiaVisita.Descrizione;
-            existingTipologiaVisita.Medici = tipologiaVisita.Medici;
 
             await _context.SaveChangesAsync();
             return NoContent();
         }
-
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Amministratore")]
         public async Task<IActionResult> Delete(int id)
         {
             var existingTipologiaVisita = await _context.TipologieVisita.FindAsync(id);

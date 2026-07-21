@@ -10,5 +10,6 @@ namespace IntelliMedi.API.Models
         public required string Username { get; set; }
         [JsonIgnore]
         public string PasswordHash { get; set; } = null!;
+        public abstract string Ruolo { get; }
     }
 }

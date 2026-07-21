@@ -67,7 +67,7 @@ namespace IntelliMedi.API.Controllers
                 new Claim(ClaimTypes.Name, utente.Nome),
                 new Claim(ClaimTypes.Surname, utente.Cognome),
                 new Claim("username", utente.Username),
-                new Claim(ClaimTypes.Role, utente.GetType().Name)
+                new Claim(ClaimTypes.Role, utente.Ruolo)
             };
 
             // assembla il token con scadenza 8 ore e firma. Dopo 8 ore il token non sarà più valido e l'utente dovrà rifare il login.

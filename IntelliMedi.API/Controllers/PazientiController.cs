@@ -1,4 +1,5 @@
 ﻿using IntelliMedi.API.Data;
+using IntelliMedi.API.Extensions;
 using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -40,8 +41,10 @@ namespace IntelliMedi.API.Controllers
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "Amministratore,Paziente")]
         public async Task<ActionResult<PazienteResponse>> GetById(int id)
         {
+            if (User.IsInRole("Paziente") && (User.IdUtenteLoggato() != id)) return Forbid();
             var paziente = await _context.Pazienti.Where(p => p.Id == id).Select(ProiezioneResponse).FirstOrDefaultAsync();
             if (paziente == null)
                 return NotFound();
@@ -52,9 +55,12 @@ namespace IntelliMedi.API.Controllers
         [AllowAnonymous]
         public async Task<ActionResult<Paziente>> Create(RegistrazioneRequest registrazione)
         {
-            if (_context.Pazienti.Any(p => p.Username == registrazione.Username))
-                return BadRequest();
-
+            if ((_context.Pazienti.Any(p => p.Username == registrazione.Username)) || (_context.Medici.Any(p => p.Username == registrazione.Username)) || (_context.Amministratori.Any(p => p.Username == registrazione.Username)))
+                return BadRequest("Username già registrato");
+            //if (_context.Medici.Any(p => p.Username == registrazione.Username))
+            //    return BadRequest("Username già registrato");
+            //if (_context.Amministratori.Any(p => p.Username == registrazione.Username))
+            //    return BadRequest("Username già registrato");
             if (_context.Pazienti.Any(p => p.CodiceFiscale == registrazione.CodiceFiscale))
                 return BadRequest("Codice fiscale già registrato");
 
@@ -71,14 +77,14 @@ namespace IntelliMedi.API.Controllers
 
             _context.Pazienti.Add(paziente);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetById), new { id = paziente.Id }, paziente);
+            return Created();
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Amministratore,Paziente")]
         public async Task<IActionResult> Update(int id, ModificaAnagraficaRequest modifica)
         {
-            var idUtenteLoggato = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (idUtenteLoggato != id.ToString()) return Forbid();
+            if (User.IsInRole("Paziente") && (User.IdUtenteLoggato() != id)) return Forbid();
 
             if (_context.Pazienti.Any(p => p.CodiceFiscale == modifica.CodiceFiscale && p.Id != id))
                 return BadRequest("Codice fiscale già registrato");
@@ -97,9 +103,17 @@ namespace IntelliMedi.API.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Amministratore,Paziente")]
         public async Task<IActionResult> Delete(int id)
         {
-            var existingPaziente = await _context.Pazienti.FindAsync(id);
+            Paziente? existingPaziente;
+            if (User.IsInRole("Amministratore"))
+                existingPaziente = await _context.Pazienti.FindAsync(id);
+            else
+            {
+                int idUtenteLoggato = User.IdUtenteLoggato();
+                existingPaziente = await _context.Pazienti.FirstOrDefaultAsync(m => m.Id == id && m.Id == idUtenteLoggato);
+            }
             if (existingPaziente == null)
             {
                 return NotFound();

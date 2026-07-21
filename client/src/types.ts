@@ -43,6 +43,14 @@ export interface Appuntamento {
   tipologiaVisita: string;
 }
 
+export interface AppuntamentoCalendario {
+  id: number | null;
+  data: string;
+  medicoId: number;
+  mio: boolean;
+}
+
+
 export interface VoceMenu {
   etichetta: string;
   descrizione: string;

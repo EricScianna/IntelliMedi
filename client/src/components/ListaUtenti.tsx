@@ -1,5 +1,5 @@
 import styles from "../styles/areaRiservata.module.css";
-import stylesShared from "../shared.module.css";
+import stylesShared from "../styles/shared.module.css";
 import { useState } from "react";
 import { SESSO_LABELS } from "../constants";
 import ConfermaEliminazione from "./ConfermaEliminazione";
@@ -174,9 +174,9 @@ function ListaUtenti({
       </div>
       <ConfermaEliminazione
         mostra={azioneConferma !== null}
-        messaggio="Eliminare anagrafica utente?"
+        messaggio={`Eliminare anagrafica utente? \n N.B: Verranno eliminati anche i suoi appuntamenti`}
         onConferma={() => {
-          azioneConferma?.(); // esegue l'azione salvata, qualunque sia
+          azioneConferma?.();
           setAzioneConferma(null);
         }}
         onAnnulla={() => setAzioneConferma(null)}
