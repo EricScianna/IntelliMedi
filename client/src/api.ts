@@ -24,9 +24,9 @@ async function request(percorso: string, options: RequestInit = {}) {
 
   const risposta = await fetch(`${API_URL}/api/${percorso}`, { ...options, headers });
 
-  if (!risposta.ok) throw new Error(await risposta.text()); // il client segnala l'errore lanciando
+  if (!risposta.ok) throw new Error(await risposta.text()); 
 
-  if (risposta.status === 204) return null; // PUT/DELETE non hanno body
+  if (risposta.status === 204) return null; 
   const testo = await risposta.text();
-  return testo ? JSON.parse(testo) : null; // body vuoto → niente .json() che esplode
+  return testo ? JSON.parse(testo) : null; 
 }

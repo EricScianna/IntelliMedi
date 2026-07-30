@@ -1,4 +1,4 @@
-import styles from "../styles/areaRiservata.module.css";
+import styles from "../styles/areaPersonale.module.css";
 import stylesShared from "../styles/shared.module.css";
 import { useState } from "react";
 import { SESSO_LABELS } from "../constants";

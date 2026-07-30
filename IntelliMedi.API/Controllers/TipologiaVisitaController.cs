@@ -31,16 +31,26 @@ namespace IntelliMedi.API.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Amministratore")]
-        public async Task<IActionResult> Create(TipologiaVisita tipologiaVisita)
+        public async Task<IActionResult> Create(TipologiaVisitaDto tipologiaVisita)
         {
-            _context.TipologieVisita.Add(tipologiaVisita);
+            if (string.IsNullOrWhiteSpace(tipologiaVisita.Descrizione))
+                return BadRequest("Inserire una descrizione per la tipologia di visita");
+
+            TipologiaVisita tipologia = new TipologiaVisita
+            { Descrizione = tipologiaVisita.Descrizione };
+
+            _context.TipologieVisita.Add(tipologia);
             await _context.SaveChangesAsync();
             return Created();
         }
+
         [HttpPut("{id}")]
         [Authorize(Roles = "Amministratore")]
-        public async Task<IActionResult> Update(int id, TipologiaVisita tipologiaVisita)
+        public async Task<IActionResult> Update(int id, TipologiaVisitaDto tipologiaVisita)
         {
+            if (string.IsNullOrWhiteSpace(tipologiaVisita.Descrizione))
+                return BadRequest("Inserire una descrizione per la tipologia di visita");
+
             if (id != tipologiaVisita.Id)
                 return BadRequest();
 
@@ -53,6 +63,7 @@ namespace IntelliMedi.API.Controllers
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
         [HttpDelete("{id}")]
         [Authorize(Roles = "Amministratore")]
         public async Task<IActionResult> Delete(int id)

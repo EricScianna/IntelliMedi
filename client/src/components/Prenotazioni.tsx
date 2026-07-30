@@ -1,4 +1,4 @@
-import styles from "../styles/areaRiservata.module.css";
+import styles from "../styles/areaPersonale.module.css";
 import stylesShared from "../styles/shared.module.css";
 import { useState } from "react";
 import { GIORNI_SETTIMANA } from "../constants";
@@ -54,8 +54,8 @@ function Prenotazioni({
   tuttiPazienti: User[] | null;
   mediciTipologia: DisponibilitaMedico[] | null;
   tipologiaVisite: TipologiaVisita[] | null;
-  onPrenota: (giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) => void;
-  onDisdici: (giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null) => void;
+  onPrenota: (giorno: Date, ora: number, tipologiaSelezionataId?: string, medicoSelezionatoId?: string) => void;
+  onDisdici: (giorno: Date, ora: number, tipologiaSelezionataId?: string, medicoSelezionatoId?: string) => void;
   onDisdiciById: (tipologiaSelezionataId: string) => void;
   onCaricaCalendarioPerMedico: (id: string) => Promise<void>;
   onCaricaCalendarioPerTipologia: (id: string) => Promise<void>;

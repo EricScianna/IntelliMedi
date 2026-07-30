@@ -9,7 +9,7 @@ function Header({ clickCards, nomeVisualizzato, clickLogout }: Readonly<{ clickC
         </button>
 
         <div className="d-flex align-items-center justify-content-between flex-grow-1 ms-lg-5 mt-2 mt-lg-0">
-          <span className="fs-4">Area riservata di {nomeVisualizzato}</span>
+          <span className="fs-4">Area personale di {nomeVisualizzato}</span>
           <button className="nav-link fw-bold text-white" onClick={clickLogout}>
             LOGOUT<i className="bi bi-door-open ms-2" style={{ fontSize: "2rem" }}></i>
           </button>

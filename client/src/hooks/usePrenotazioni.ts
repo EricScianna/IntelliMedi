@@ -44,8 +44,9 @@ export function usePrenotazioni({
   const latoPaziente = isPaziente || (isAdmin && (tipoLista === "Pazienti" || isNuovaPrenotazioneAdmin));
   const idUtenteInt = Number(idUtente);
 
-  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null): Promise<boolean> {
-    //cerca fra tutti i medici se quello scelto esiste. può essere null perché il paziente potrebbe aver scelto la tipologia e non il medico
+  async function postAppuntamento(giorno: Date, oraAppuntamento: number, tipologiaSelezionataId?: string, medicoSelezionatoId?: string): Promise<boolean> {
+    //cerca fra tutti i medici se quello scelto esiste.
+    // può essere null perché il paziente potrebbe aver scelto la tipologia e non il medico
     const medicoScelto = tuttiMedici?.find((m) => m.medicoId === Number(medicoSelezionatoId));
     //ricava tipologiaId dalla tipololgia, se l'utente l'ha scelta, oppure da un medico
     const tipologiaId = tipologiaSelezionataId ? Number(tipologiaSelezionataId) : medicoScelto?.tipologiaVisitaId;
@@ -131,7 +132,7 @@ export function usePrenotazioni({
     if (ok) await caricaDisponibilitaPerMedico(idUtente ?? "");
   }
 
-  async function cancellaAppuntamento(giorno: Date, ora: number, tipologiaSelezionataId: string | null, medicoSelezionatoId?: string | null): Promise<boolean> {
+  async function cancellaAppuntamento(giorno: Date, ora: number, tipologiaSelezionataId?: string, medicoSelezionatoId?: string): Promise<boolean> {
     const { appuntamentiCella } = datiCella(giorno, ora);
     const appuntamentoPersonale = appuntamentiCella.find((x) => {
       return latoPaziente ? x.mio : x.medicoId === idUtenteInt;

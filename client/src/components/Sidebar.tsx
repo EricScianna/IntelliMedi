@@ -1,4 +1,4 @@
-import styles from "../styles/areaRiservata.module.css";
+import styles from "../styles/areaPersonale.module.css";
 import type { VoceMenu } from "../types";
 
 function Sidebar({ sidebarChiusa, clickToggleSidebar, vociSidebar }: Readonly<{ sidebarChiusa: boolean; clickToggleSidebar: () => void; vociSidebar: VoceMenu[] }>) {

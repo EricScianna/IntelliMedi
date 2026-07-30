@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import styles from "../styles/areaRiservata.module.css";
+import styles from "../styles/areaPersonale.module.css";
 import stylesShared from "../styles/shared.module.css";
 import type { DatiForm, TipologiaVisita, User, VoceMenu } from "../types";
 import { FORM_VUOTO } from "../constants";
@@ -31,10 +31,8 @@ interface Colonna {
 //tranne useState, tutto quello che c'è all'interno viene ricreato ad ogni render
 //Ogni setState prenota un render, il valore si aggiorna solo al render successivo
 function AreaPersonale() {
-  //#region Stati
   const { utente, isPaziente, isMedico, isAdmin, setUtente } = useUtente();
   const ruolo = utente?.ruolo ?? ""; // solo se ti serve ancora 'ruolo' altrove (rottaPerRuolo[ruolo], vociPerRuolo[ruolo]…)
-
   // Stati per la gestione dei dati users
   const [form, setForm] = useState<DatiForm>(FORM_VUOTO);
   const [username, setUsername] = useState("");
@@ -62,7 +60,6 @@ function AreaPersonale() {
   // Stati per la gestione delle prenotazioni
   const [pazienteSelezionatoId, setPazienteSelezionatoId] = useState("");
   const [isNuovaPrenotazioneAdmin, setNuovaPrenotazioneAdmin] = useState<boolean>(false);
-  //#endregion
 
   const colonnePerTipo: Record<string, Colonna> = {
     Medici: {

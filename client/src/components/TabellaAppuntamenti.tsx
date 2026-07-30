@@ -1,5 +1,5 @@
 import type { Appuntamento } from "../types";
-import styles from "../styles/areaRiservata.module.css";
+import styles from "../styles/areaPersonale.module.css";
 
 function formattaData(dataIso: string) {
   const d = new Date(dataIso);

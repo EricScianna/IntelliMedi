@@ -1,4 +1,5 @@
 ﻿using IntelliMedi.API.Data;
+using IntelliMedi.API.Extensions;
 using IntelliMedi.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -134,11 +135,14 @@ namespace IntelliMedi.API.Controllers
                 Id = medico.Id,
                 Nome = medico.Nome,
                 Cognome = medico.Cognome,
-                TipologiaVisite = (medico.TipologiaVisite?.ToList() ?? new List<TipologiaVisita>()).Select(t => new TipologiaVisitaDto { Id = t.Id, Descrizione = t.Descrizione }).ToList(),
-                Sesso = medico.Sesso,
-                DataNascita = medico.DataNascita,
-                CodiceFiscale = medico.CodiceFiscale
+                TipologiaVisite = (medico.TipologiaVisite?.ToList() ?? new List<TipologiaVisita>()).Select(t => new TipologiaVisitaDto { Id = t.Id, Descrizione = t.Descrizione }).ToList()
             };
+            if (User.IsInRole("Amministratore") || (User.IsInRole("Medico") && (User.IdUtenteLoggato() == medico.Id)))
+            {
+                nuovoMedico.Sesso = medico.Sesso;
+                nuovoMedico.DataNascita = medico.DataNascita;
+                nuovoMedico.CodiceFiscale = medico.CodiceFiscale;
+            }
             return nuovoMedico;
         }
     }
